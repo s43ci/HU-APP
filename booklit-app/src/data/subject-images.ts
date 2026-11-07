@@ -12,5 +12,11 @@ export const subjectImages: Partial<Record<string, number>> = {
   periodontics: require('@/assets/subjects/periodontics.jpg'),
   paediatric: require('@/assets/subjects/paediatric.jpg'),
   'dental-trauma': require('@/assets/subjects/dental-trauma.jpg'),
+  'dental-anatomy': require('@/assets/subjects/dental-anatomy.jpg'),
+  'human-anatomy': require('@/assets/subjects/human-anatomy.jpg'),
+  'medical-biology': require('@/assets/subjects/medical-biology.jpg'),
+  'oral-histology': require('@/assets/subjects/oral-histology.jpg'),
+  'dental-materials': require('@/assets/subjects/dental-materials.jpg'),
+  physiology: require('@/assets/subjects/physiology.jpg'),
   uploads: require('@/assets/subjects/uploads.jpg'),
 };
