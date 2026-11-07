@@ -1,0 +1,88 @@
+# صور المواد: برومبتات Gemini
+
+صورة لكل مادة تظهر بشاشة **Library** وبرأس صفحة المادة. الصور كلها بنفس الثيم حتى تبين المكتبة مرتبة.
+
+## طريقة الاستخدام
+
+1. افتح Gemini واختر توليد الصور.
+2. انسخ **الستايل الموحد** أولاً، وبعده برومبت المادة، بنفس الرسالة.
+3. خلّ المقاس **مربع 1:1** (1024×1024 أو أكبر).
+4. دزلي الصورة واكتب اسم المادة. أنا أسميها وأضيفها للتطبيق مباشرة.
+
+> إذا طلعت صورة بيها كتابة أو لون غريب، اطلب من Gemini: «نفس الصورة بدون أي نص، والخلفية لافندر فاتح».
+
+---
+
+## الستايل الموحد (يُلصق قبل كل برومبت)
+
+```
+Soft 3D medical illustration in a clean, minimal, premium app style.
+Single subject centered with generous empty space around it.
+Matte clay-like materials with subtle glossy highlights, soft studio lighting, gentle shadow under the object.
+Color palette: pearl white and soft ivory for teeth and bone, accents only in electric violet (#493BEA) and soft purple (#A66BFA).
+Background: smooth lavender gradient from #EDEBFE (top) to #F5F4FF (bottom), no texture, no props, no scenery.
+No text, no letters, no labels, no logos, no watermark, no people, no blood.
+Square 1:1 composition, high detail, crisp edges.
+```
+
+---
+
+## برومبت كل مادة
+
+| # | المادة | اسم الملف |
+|---|--------|-----------|
+| 1 | Oral Surgery | `oral-surgery.jpg` |
+| 2 | Orthodontics | `orthodontics.jpg` |
+| 3 | Oral Medicine | `oral-medicine.jpg` |
+| 4 | Prosthodontics | `prosthodontics.jpg` |
+| 5 | Endodontics | `endodontics.jpg` |
+| 6 | Periodontics | `periodontics.jpg` |
+| 7 | Paediatric Dentistry | `paediatric.jpg` |
+| 8 | Dental Trauma | `dental-trauma.jpg` |
+
+### 1. Oral Surgery: `oral-surgery.jpg`
+```
+A stylized human skull in three-quarter view showing the maxilla and mandible with a full set of teeth, a thin violet glowing line tracing the midface (Le Fort level), a small surgical elevator instrument resting beside the jaw.
+```
+
+### 2. Orthodontics: `orthodontics.jpg`
+```
+A close-up of an upper and lower dental arch with neat metal brackets and a thin archwire, small violet elastic ligatures on each bracket, teeth perfectly aligned, viewed from the front at a slight angle.
+```
+
+### 3. Oral Medicine: `oral-medicine.jpg`
+```
+A single healthy molar floating above a soft rounded pink mucosa surface, a small stethoscope chest piece resting beside it, a subtle violet magnifying lens hovering over the mucosa.
+```
+
+### 4. Prosthodontics: `prosthodontics.jpg`
+```
+A ceramic dental crown hovering just above a prepared tooth abutment on a small gum base, a second piece showing a partial denture with violet acrylic base, clean and precise.
+```
+
+### 5. Endodontics: `endodontics.jpg`
+```
+A cross-section of a molar tooth showing the enamel, dentin and pulp chamber, root canals highlighted in glowing violet, a thin endodontic file entering one canal from above.
+```
+
+### 6. Periodontics: `periodontics.jpg`
+```
+A short row of three lower teeth set in soft pink gums, a slender periodontal probe touching the gum margin of the middle tooth, a small violet droplet near the gum line.
+```
+
+### 7. Paediatric Dentistry: `paediatric.jpg`
+```
+A small, cute baby tooth with a gentle rounded shape and a tiny friendly sparkle, next to a child-sized toothbrush with violet bristles, playful but still clean and medical.
+```
+
+### 8. Dental Trauma: `dental-trauma.jpg`
+```
+An upper central incisor with a clean diagonal crown fracture, the broken fragment floating slightly away from the tooth, a thin violet crack-line glow along the fracture edge.
+```
+
+---
+
+## (اختياري) صورة لملفات الطالب المرفوعة: `uploads.jpg`
+```
+A neat stack of three soft white paper documents with a folded corner, a small violet bookmark ribbon, and a subtle upward arrow glowing in violet above the stack.
+```

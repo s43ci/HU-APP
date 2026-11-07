@@ -3,7 +3,7 @@
  * Hierarchy: Stage -> Subject -> Booklet -> Topic -> Content Blocks, MCQs linked by topicId.
  * Replace with API data in src/lib/api.ts (see docs/plan.md, phase 2).
  */
-import type { Booklet, ContentBlock, Mcq, Stage, Subject, Topic } from './types';
+import type { Booklet, ContentBlock, ImportedBooklet, Mcq, Stage, Subject, Topic } from './types';
 
 export const stages: Stage[] = [
   { id: 'stage4', name: 'Fourth Stage' },
@@ -173,6 +173,38 @@ export const mcqs: Mcq[] = topics.flatMap((t) => {
   ];
   return list.map((q, i) => ({ ...q, id: `${t.id}--q${i + 1}`, topicId: t.id }));
 });
+
+/** Virtual subject that holds the student's uploaded files. */
+export const UPLOADS_SUBJECT: Subject = {
+  id: 'uploads',
+  name: 'My Uploads',
+  stageId: 'stage5',
+  color: '#493BEA',
+  icon: 'file',
+  isFree: true,
+  description: 'Booklets generated from your own files.',
+};
+subjects.push(UPLOADS_SUBJECT);
+
+/** Course subjects only (excludes "My Uploads"). */
+export const courseSubjects = () => subjects.filter((s) => s.id !== UPLOADS_SUBJECT.id);
+
+let importedIds = new Set<string>();
+/** Merge the student's imported booklets into the shared content arrays (called by the store). */
+export function setImportedContent(list: ImportedBooklet[]) {
+  const isOld = (bookletId: string) => importedIds.has(bookletId);
+  for (const arr of [booklets] as Booklet[][]) for (let i = arr.length - 1; i >= 0; i--) if (isOld(arr[i].id)) arr.splice(i, 1);
+  for (let i = topics.length - 1; i >= 0; i--) if (isOld(topics[i].bookletId)) topics.splice(i, 1);
+  const oldTopicPrefix = [...importedIds];
+  for (let i = mcqs.length - 1; i >= 0; i--) if (oldTopicPrefix.some((b) => mcqs[i].topicId.startsWith(`${b}--`))) mcqs.splice(i, 1);
+
+  importedIds = new Set(list.map((b) => b.id));
+  list.forEach((b, i) => {
+    booklets.push({ id: b.id, subjectId: UPLOADS_SUBJECT.id, title: b.title, order: i + 1 });
+    topics.push(...b.topics);
+    mcqs.push(...b.mcqs);
+  });
+}
 
 // ---------- selectors ----------
 export const getSubject = (id: string) => subjects.find((s) => s.id === id);

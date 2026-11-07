@@ -1,79 +1,141 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import type { ComponentProps, ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type TextProps, type TextStyle, type ViewStyle } from 'react-native';
+import { Image } from 'expo-image';
+import { router } from 'expo-router';
+import { ArrowLeft, ArrowUpRight, Lock, type LucideIcon } from 'lucide-react-native';
+import type { ReactNode } from 'react';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type ScrollViewProps,
+  type StyleProp,
+  type TextProps,
+  type TextStyle,
+  type ViewStyle,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Font, Radius } from '@/constants/theme';
+import { Font, Radius, TAB_BAR_SPACE, Type } from '@/constants/theme';
+import { subjectVisual } from '@/lib/subject-visuals';
 import { usePalette } from '@/store/app-store';
 
-export type IconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
+export type { LucideIcon };
 
-export function Icon({ name, size = 22, color }: { name: string; size?: number; color?: string }) {
+/** Thin line icon (Iconly-style): 1.6 stroke, rounded caps. */
+export function Icon({ as: As, size = 20, color, stroke = 1.6 }: { as: LucideIcon; size?: number; color?: string; stroke?: number }) {
   const p = usePalette();
-  return <MaterialCommunityIcons name={name as IconName} size={size} color={color ?? p.icon} />;
+  return <As size={size} color={color ?? p.icon} strokeWidth={stroke} absoluteStrokeWidth />;
 }
 
 type Weight = keyof typeof Font;
 export function Txt({
   weight = 'regular',
-  size = 15,
+  size = Type.body,
   color,
   muted,
+  faint,
   style,
   ...rest
-}: TextProps & { weight?: Weight; size?: number; color?: string; muted?: boolean; style?: StyleProp<TextStyle> }) {
+}: TextProps & { weight?: Weight; size?: number; color?: string; muted?: boolean; faint?: boolean; style?: StyleProp<TextStyle> }) {
   const p = usePalette();
   return (
     <Text
       {...rest}
-      style={[{ fontFamily: Font[weight], fontSize: size, color: color ?? (muted ? p.textMuted : p.text) }, style]}
+      style={[{ fontFamily: Font[weight], fontSize: size, color: color ?? (faint ? p.textFaint : muted ? p.textMuted : p.text) }, style]}
     />
+  );
+}
+
+/** Two-tone heading like "Need help / studying today?" */
+export function Heading({ light, strong, size = Type.display }: { light: string; strong: string; size?: number }) {
+  const p = usePalette();
+  return (
+    <Text style={{ fontSize: size, lineHeight: size * 1.18, letterSpacing: -0.6 }}>
+      <Text style={{ fontFamily: Font.light, color: p.textMuted }}>{light} </Text>
+      <Text style={{ fontFamily: Font.semibold, color: p.text }}>{strong}</Text>
+    </Text>
+  );
+}
+
+/** Scrollable tab page with safe-area top and room for the floating nav bar. */
+export function Page({ children, contentStyle, ...rest }: ScrollViewProps & { children: ReactNode; contentStyle?: StyleProp<ViewStyle> }) {
+  const insets = useSafeAreaInsets();
+  const p = usePalette();
+  return (
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      style={{ flex: 1, backgroundColor: p.bg }}
+      contentContainerStyle={[{ paddingTop: insets.top + 10, paddingHorizontal: 20, paddingBottom: TAB_BAR_SPACE + insets.bottom }, contentStyle]}
+      {...rest}>
+      {children}
+    </ScrollView>
   );
 }
 
 export function Card({ children, style, onPress }: { children: ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void }) {
   const p = usePalette();
-  const base: StyleProp<ViewStyle> = [
-    styles.card,
-    { backgroundColor: p.surface, borderColor: p.border, shadowColor: p.shadow },
-    style,
-  ];
+  const base: StyleProp<ViewStyle> = [styles.card, { backgroundColor: p.surface, shadowColor: p.shadow }, style];
   if (!onPress) return <View style={base}>{children}</View>;
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [base, pressed && { opacity: 0.85, transform: [{ scale: 0.99 }] }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [base, pressed && styles.pressed]}>
       {children}
     </Pressable>
   );
 }
 
-export function ProgressBar({ value, color, track, height = 6 }: { value: number; color?: string; track?: string; height?: number }) {
+/** Round icon button (white circle). */
+export function CircleButton({
+  icon,
+  onPress,
+  size = 44,
+  variant = 'surface',
+  label,
+  badge,
+}: {
+  icon: LucideIcon;
+  onPress?: () => void;
+  size?: number;
+  variant?: 'surface' | 'ink' | 'primary' | 'soft' | 'glass';
+  label: string;
+  badge?: boolean;
+}) {
   const p = usePalette();
+  const bg = { surface: p.surface, ink: p.ink, primary: p.primary, soft: p.primarySoft, glass: 'rgba(255,255,255,0.85)' }[variant];
+  const fg = { surface: p.icon, ink: p.onInk, primary: '#fff', soft: p.primary, glass: '#17172B' }[variant];
   return (
-    <View style={{ height, borderRadius: height, backgroundColor: track ?? p.border, overflow: 'hidden' }}>
-      <View style={{ width: `${Math.round(Math.min(1, Math.max(0, value)) * 100)}%`, height, borderRadius: height, backgroundColor: color ?? p.primary }} />
-    </View>
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      onPress={onPress}
+      hitSlop={6}
+      style={({ pressed }) => [
+        { width: size, height: size, borderRadius: size / 2, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' },
+        variant === 'surface' && { shadowColor: p.shadow, shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 1 },
+        pressed && styles.pressed,
+      ]}>
+      <Icon as={icon} size={size * 0.44} color={fg} />
+      {badge ? <View style={[styles.badge, { borderColor: bg }]} /> : null}
+    </Pressable>
   );
 }
 
-/** Square artwork tile for a subject: tinted gradient + line icon. */
-export function SubjectArt({ color, icon, size = 64, radius = 14 }: { color: string; icon: string; size?: number; radius?: number }) {
-  return (
-    <LinearGradient
-      colors={[shade(color, 0.25), color, shade(color, -0.25)]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={{ width: size, height: size, borderRadius: radius, alignItems: 'center', justifyContent: 'center' }}>
-      <MaterialCommunityIcons name={icon as IconName} size={size * 0.5} color="rgba(255,255,255,0.95)" />
-    </LinearGradient>
-  );
-}
-
-export function IconBadge({ name, color, bg, size = 40 }: { name: string; color?: string; bg?: string; size?: number }) {
+export function Chip({ label, active, onPress, icon }: { label: string; active?: boolean; onPress?: () => void; icon?: LucideIcon }) {
   const p = usePalette();
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 2.6, backgroundColor: bg ?? p.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
-      <MaterialCommunityIcons name={name as IconName} size={size * 0.52} color={color ?? p.primary} />
-    </View>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.chip,
+        { backgroundColor: active ? p.ink : p.surface, borderColor: active ? p.ink : p.border },
+        pressed && styles.pressed,
+      ]}>
+      {icon ? <Icon as={icon} size={15} color={active ? p.onInk : p.icon} /> : null}
+      <Txt weight="medium" size={Type.small} color={active ? p.onInk : p.text}>
+        {label}
+      </Txt>
+    </Pressable>
   );
 }
 
@@ -81,84 +143,128 @@ export function Button({
   label,
   icon,
   onPress,
-  variant = 'primary',
+  variant = 'ink',
   style,
+  disabled,
 }: {
   label: string;
-  icon?: string;
+  icon?: LucideIcon;
   onPress?: () => void;
-  variant?: 'primary' | 'soft' | 'ghost' | 'danger';
+  variant?: 'ink' | 'primary' | 'soft' | 'outline' | 'danger' | 'white';
   style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
 }) {
   const p = usePalette();
-  const bg = variant === 'primary' ? p.primary : variant === 'soft' ? p.primarySoft : variant === 'danger' ? p.dangerSoft : 'transparent';
-  const fg = variant === 'primary' ? '#fff' : variant === 'danger' ? '#E5484D' : p.primary;
+  const bg = { ink: p.ink, primary: p.primary, soft: p.primarySoft, outline: 'transparent', danger: p.dangerSoft, white: '#FFFFFF' }[variant];
+  const fg = { ink: p.onInk, primary: '#fff', soft: p.primary, outline: p.text, danger: '#E5484D', white: '#17172B' }[variant];
   return (
     <Pressable
+      disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [styles.button, { backgroundColor: bg, opacity: pressed ? 0.8 : 1 }, variant === 'ghost' && { borderWidth: 1, borderColor: p.border }, style]}>
-      {icon ? <MaterialCommunityIcons name={icon as IconName} size={18} color={fg} /> : null}
-      <Txt weight="semibold" color={fg}>
+      style={({ pressed }) => [
+        styles.button,
+        { backgroundColor: bg },
+        variant === 'outline' && { borderWidth: 1, borderColor: p.border },
+        (pressed || disabled) && { opacity: disabled ? 0.45 : 0.85 },
+        style,
+      ]}>
+      {icon ? <Icon as={icon} size={17} color={fg} /> : null}
+      <Txt weight="semibold" size={Type.body} color={fg}>
         {label}
       </Txt>
     </Pressable>
   );
 }
 
-export function Chip({ label, active, onPress }: { label: string; active?: boolean; onPress?: () => void }) {
+export function ProgressBar({ value, color, track, height = 4 }: { value: number; color?: string; track?: string; height?: number }) {
   const p = usePalette();
   return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.chip, { backgroundColor: active ? p.primary : p.surface, borderColor: active ? p.primary : p.border }]}>
-      <Txt weight={active ? 'semibold' : 'medium'} size={14} color={active ? '#fff' : p.text}>
-        {label}
-      </Txt>
-    </Pressable>
+    <View style={{ height, borderRadius: height, backgroundColor: track ?? p.surfaceAlt, overflow: 'hidden' }}>
+      <View style={{ width: `${Math.round(Math.min(1, Math.max(0, value)) * 100)}%`, height, borderRadius: height, backgroundColor: color ?? p.primary }} />
+    </View>
   );
 }
 
 export function SectionTitle({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
-  const p = usePalette();
   return (
     <View style={styles.sectionRow}>
-      <Txt weight="bold" size={19}>
+      <Txt weight="semibold" size={Type.h2}>
         {title}
       </Txt>
       {action ? (
-        <Pressable onPress={onAction} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Txt weight="semibold" size={14} color={p.primary}>
+        <Pressable onPress={onAction} hitSlop={8}>
+          <Txt weight="medium" size={Type.small} muted>
             {action}
           </Txt>
-          <MaterialCommunityIcons name="chevron-right" size={18} color={p.primary} />
         </Pressable>
       ) : null}
     </View>
   );
 }
 
-export function EmptyState({ icon, title, text, action, onAction }: { icon: string; title: string; text: string; action?: string; onAction?: () => void }) {
+/** Subject artwork: Gemini image when available, otherwise a calm tinted tile with a thin icon. */
+export function SubjectThumb({ subjectId, size, width, height, radius = 16, locked }: { subjectId: string; size?: number; width?: number | `${number}%`; height?: number; radius?: number; locked?: boolean }) {
+  const p = usePalette();
+  const v = subjectVisual(subjectId);
+  const w = width ?? size ?? 56;
+  const h = height ?? size ?? 56;
+  const iconSize = Math.min(typeof w === 'number' ? w : h, h) * 0.36;
   return (
-    <View style={{ alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24, gap: 10 }}>
-      <IconBadge name={icon} size={64} />
-      <Txt weight="bold" size={18} style={{ marginTop: 6 }}>
-        {title}
-      </Txt>
-      <Txt muted style={{ textAlign: 'center', lineHeight: 21 }}>
-        {text}
-      </Txt>
-      {action ? <Button label={action} onPress={onAction} style={{ marginTop: 8 }} /> : null}
+    <View style={{ width: w, height: h, borderRadius: radius, overflow: 'hidden', backgroundColor: p.primarySoft }}>
+      {v.image ? (
+        <Image source={v.image} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+          <Icon as={v.icon} size={iconSize} color={p.primary} stroke={1.4} />
+        </View>
+      )}
+      {locked ? (
+        <View style={styles.lock}>
+          <Lock size={12} color="#17172B" strokeWidth={2} />
+        </View>
+      ) : null}
     </View>
   );
 }
 
-/** Lighten (amt>0) or darken (amt<0) a hex color. */
-export function shade(hex: string, amt: number) {
-  const n = parseInt(hex.slice(1), 16);
-  const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) =>
-    Math.round(amt > 0 ? c + (255 - c) * amt : c * (1 + amt)),
+export function ArrowCircle({ onPress, variant = 'surface', size = 36 }: { onPress?: () => void; variant?: 'surface' | 'ink' | 'primary'; size?: number }) {
+  return <CircleButton icon={ArrowUpRight} onPress={onPress} size={size} variant={variant} label="Open" />;
+}
+
+/** Top bar for inner screens: round back button, centred title, optional right slot. */
+export function TopBar({ title, right, onBack }: { title?: string; right?: ReactNode; onBack?: () => void }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
+      <CircleButton icon={ArrowLeft} label="Back" onPress={onBack ?? (() => (router.canGoBack() ? router.back() : router.replace('/')))} />
+      <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: 8 }}>
+        {title ? (
+          <Txt weight="semibold" size={Type.h2 - 1} numberOfLines={1}>
+            {title}
+          </Txt>
+        ) : null}
+      </View>
+      <View style={{ minWidth: 44, alignItems: 'flex-end' }}>{right}</View>
+    </View>
   );
-  return `#${ch.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+export function EmptyState({ icon, title, text, action, onAction }: { icon: LucideIcon; title: string; text: string; action?: string; onAction?: () => void }) {
+  const p = usePalette();
+  return (
+    <View style={{ alignItems: 'center', paddingVertical: 44, paddingHorizontal: 24, gap: 8 }}>
+      <View style={[styles.emptyIcon, { backgroundColor: p.primarySoft }]}>
+        <Icon as={icon} size={28} color={p.primary} />
+      </View>
+      <Txt weight="semibold" size={Type.h2} style={{ marginTop: 8 }}>
+        {title}
+      </Txt>
+      <Txt muted size={Type.small} style={{ textAlign: 'center', lineHeight: 20 }}>
+        {text}
+      </Txt>
+      {action ? <Button label={action} onPress={onAction} style={{ marginTop: 10 }} /> : null}
+    </View>
+  );
 }
 
 export function withAlpha(hex: string, a: number) {
@@ -168,21 +274,17 @@ export function withAlpha(hex: string, a: number) {
 const styles = StyleSheet.create({
   card: {
     borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    shadowOpacity: 0.06,
-    shadowRadius: 14,
+    shadowOpacity: 0.05,
+    shadowRadius: 16,
     shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
+    elevation: 1,
   },
-  button: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 18,
-    paddingVertical: 13,
-    borderRadius: Radius.md,
-  },
-  chip: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: Radius.pill, borderWidth: 1 },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.985 }] },
+  badge: { position: 'absolute', top: 10, right: 11, width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF5C93', borderWidth: 1.5 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: Radius.pill, borderWidth: 1 },
+  button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 14, borderRadius: Radius.pill },
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  lock: { position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.92)', alignItems: 'center', justifyContent: 'center' },
+  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 10 },
+  emptyIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
 });

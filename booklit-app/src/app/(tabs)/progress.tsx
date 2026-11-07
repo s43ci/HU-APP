@@ -1,10 +1,11 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import { ChevronDown, ChevronRight, ChevronUp, Flame, ListChecks, Target } from 'lucide-react-native';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
+import { Pressable, StyleSheet, View } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 
-import { Card, Icon, ProgressBar, SectionTitle, SubjectArt, Txt } from '@/components/ui';
+import { Card, Heading, Icon, Page, ProgressBar, SectionTitle, SubjectThumb, Txt } from '@/components/ui';
+import { Type } from '@/constants/theme';
 import { booklets, bookletsOf, subjects, topicsOf } from '@/data/content';
 import { bookletProgress, isSubjectUnlocked, subjectProgress } from '@/lib/progress';
 import { useApp } from '@/store/app-store';
@@ -15,7 +16,7 @@ export default function Progress() {
   const [open, setOpen] = useState<string | null>(null);
   const [all, setAll] = useState(false);
 
-  const available = subjects.filter((s) => isSubjectUnlocked(s.id, app.unlockedSubjects));
+  const available = subjects.filter((s) => isSubjectUnlocked(s.id, app.unlockedSubjects) && bookletsOf(s.id).length);
   const availableBooklets = booklets.filter((b) => available.some((s) => s.id === b.subjectId));
   const completedBooklets = availableBooklets.filter((b) => {
     const ts = topicsOf(b.id);
@@ -24,133 +25,132 @@ export default function Progress() {
   const totalTopics = available.reduce((n, s) => n + subjectProgress(s.id, []).total, 0);
   const doneTopics = available.reduce((n, s) => n + subjectProgress(s.id, app.completedTopics).done, 0);
   const overall = totalTopics ? doneTopics / totalTopics : 0;
+  const accuracy = app.quiz.answered ? Math.round((app.quiz.correct / app.quiz.answered) * 100) : 0;
 
-  const sorted = [...available].sort(
-    (a, b) => subjectProgress(b.id, app.completedTopics).pct - subjectProgress(a.id, app.completedTopics).pct,
-  );
+  const sorted = [...available].sort((a, b) => subjectProgress(b.id, app.completedTopics).pct - subjectProgress(a.id, app.completedTopics).pct);
   const shown = all ? sorted : sorted.slice(0, 4);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
-      <Txt weight="extrabold" size={32} style={{ letterSpacing: -0.5 }}>
-        Progress
-      </Txt>
-      <Txt muted size={15} style={{ marginTop: 4 }}>
-        Track your study journey
-      </Txt>
-
-      <LinearGradient colors={['#17172B', '#26245A', '#3A2F8F']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
-        <View style={{ flex: 1, gap: 6 }}>
-          <View style={styles.heroIcon}>
-            <Icon name="layers-outline" size={26} color="#C9C2FF" />
-          </View>
-          <Txt weight="bold" size={20} color="#fff" style={{ marginTop: 10 }}>
-            Your Progress
-          </Txt>
-          <Txt size={14} color="rgba(255,255,255,0.75)">
-            {completedBooklets} of {availableBooklets.length} booklets
-          </Txt>
-          <Txt size={13} color="rgba(255,255,255,0.6)">
-            {doneTopics} of {totalTopics} topics done
-          </Txt>
-        </View>
-        <Ring value={overall} />
-      </LinearGradient>
-
-      <View style={{ marginTop: 24 }}>
-        <SectionTitle title="By Subject" action={all ? 'Show Less' : 'View All'} onAction={() => setAll((v) => !v)} />
+    <Page>
+      <Txt weight="medium" muted size={Type.small}>Progress</Txt>
+      <View style={{ marginTop: 14 }}>
+        <Heading light="Track your" strong="study journey." />
       </View>
-      {shown.map((s) => {
-        const pr = subjectProgress(s.id, app.completedTopics);
-        const expanded = open === s.id;
-        return (
-          <Card key={s.id} style={{ padding: 14, marginBottom: 12 }} onPress={() => setOpen(expanded ? null : s.id)}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-              <SubjectArt color={s.color} icon={s.icon} size={52} />
-              <View style={{ flex: 1, gap: 4 }}>
-                <Txt weight="bold" size={16}>
-                  {s.name}
-                </Txt>
-                <Txt muted size={13}>
-                  {pr.done} of {pr.total} topics
-                </Txt>
-                <ProgressBar value={pr.pct} color={s.color} />
+
+      <Card style={styles.overview}>
+        <Ring value={overall} color={p.primary} track={p.surfaceAlt} text={p.text} muted={p.textMuted} />
+        <View style={{ flex: 1, gap: 12 }}>
+          <Stat label="Booklets done" value={`${completedBooklets}/${availableBooklets.length}`} />
+          <Stat label="Topics done" value={`${doneTopics}/${totalTopics}`} />
+        </View>
+      </Card>
+
+      <View style={styles.mini}>
+        <MiniStat icon={Target} label="Accuracy" value={`${accuracy}%`} />
+        <MiniStat icon={ListChecks} label="Answered" value={`${app.quiz.answered}`} />
+        <MiniStat icon={Flame} label="Streak" value={`${app.streak}d`} />
+      </View>
+
+      <SectionTitle title="By subject" action={sorted.length > 4 ? (all ? 'Show less' : 'View all') : undefined} onAction={() => setAll((v) => !v)} />
+      <View style={{ gap: 10 }}>
+        {shown.map((s) => {
+          const pr = subjectProgress(s.id, app.completedTopics);
+          const expanded = open === s.id;
+          return (
+            <Card key={s.id} style={{ padding: 12, borderRadius: 20 }} onPress={() => setOpen(expanded ? null : s.id)}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <SubjectThumb subjectId={s.id} size={44} radius={14} />
+                <View style={{ flex: 1, gap: 6 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Txt weight="semibold" numberOfLines={1} style={{ flex: 1 }}>{s.name}</Txt>
+                    <Txt weight="medium" size={Type.small} color={p.primary}>{Math.round(pr.pct * 100)}%</Txt>
+                  </View>
+                  <ProgressBar value={pr.pct} />
+                  <Txt faint size={Type.tiny}>{pr.done} of {pr.total} topics</Txt>
+                </View>
+                <Icon as={expanded ? ChevronUp : ChevronDown} size={18} color={p.textFaint} />
               </View>
-              <Txt weight="bold" size={16} style={{ width: 48, textAlign: 'right' }}>
-                {Math.round(pr.pct * 100)}%
-              </Txt>
-              <Icon name={expanded ? 'chevron-up' : 'chevron-down'} />
-            </View>
-            {expanded ? (
-              <View style={{ marginTop: 12, gap: 4 }}>
-                {bookletsOf(s.id).map((b) => {
-                  const bp = bookletProgress(b.id, app.completedTopics, app.topicProgress);
-                  return (
-                    <Pressable
-                      key={b.id}
-                      onPress={() => router.push({ pathname: '/subject/[id]', params: { id: s.id, booklet: b.id } })}
-                      style={[styles.bRow, { borderTopColor: p.border }]}>
-                      <Txt weight="medium" style={{ flex: 1 }} numberOfLines={1}>
-                        {b.title}
-                      </Txt>
-                      <Txt muted size={12}>
-                        {bp.done}/{bp.total}
-                      </Txt>
-                      <View style={{ width: 70 }}>
-                        <ProgressBar value={bp.pct} color={s.color} height={5} />
-                      </View>
-                      <Icon name="chevron-right" size={18} />
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ) : null}
-          </Card>
-        );
-      })}
-    </ScrollView>
+              {expanded ? (
+                <View style={{ marginTop: 10 }}>
+                  {bookletsOf(s.id).map((b) => {
+                    const bp = bookletProgress(b.id, app.completedTopics, app.topicProgress);
+                    return (
+                      <Pressable
+                        key={b.id}
+                        onPress={() => router.push({ pathname: '/subject/[id]', params: { id: s.id, booklet: b.id } })}
+                        style={[styles.bRow, { borderTopColor: p.border }]}>
+                        <Txt size={Type.small} style={{ flex: 1 }} numberOfLines={1}>{b.title}</Txt>
+                        <Txt faint size={Type.tiny}>{bp.done}/{bp.total}</Txt>
+                        <View style={{ width: 56 }}><ProgressBar value={bp.pct} height={3} /></View>
+                        <Icon as={ChevronRight} size={16} color={p.textFaint} />
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+            </Card>
+          );
+        })}
+      </View>
+    </Page>
   );
 }
 
-function Ring({ value, size = 124 }: { value: number; size?: number }) {
-  const stroke = 10;
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <View>
+      <Txt weight="semibold" size={Type.h2}>{value}</Txt>
+      <Txt muted size={Type.tiny}>{label}</Txt>
+    </View>
+  );
+}
+
+function MiniStat({ icon, label, value }: { icon: Parameters<typeof Icon>[0]['as']; label: string; value: string }) {
+  const { palette: p } = useApp();
+  return (
+    <View style={[styles.miniStat, { backgroundColor: p.surface }]}>
+      <View style={[styles.miniIcon, { backgroundColor: p.primarySoft }]}>
+        <Icon as={icon} size={16} color={p.primary} />
+      </View>
+      <Txt weight="semibold" size={Type.h2}>{value}</Txt>
+      <Txt muted size={Type.tiny}>{label}</Txt>
+    </View>
+  );
+}
+
+function Ring({ value, color, track, text, muted, size = 112 }: { value: number; color: string; track: string; text: string; muted: string; size?: number }) {
+  const stroke = 8;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-        <Defs>
-          <SvgGradient id="g" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor="#A66BFA" />
-            <Stop offset="1" stopColor="#5B8CFF" />
-          </SvgGradient>
-        </Defs>
-        <Circle cx={size / 2} cy={size / 2} r={r} stroke="rgba(255,255,255,0.12)" strokeWidth={stroke} fill="none" />
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          stroke="url(#g)"
-          strokeWidth={stroke}
-          fill="none"
-          strokeLinecap="round"
-          strokeDasharray={`${c} ${c}`}
-          strokeDashoffset={c * (1 - Math.max(0.001, value))}
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        />
+        <Circle cx={size / 2} cy={size / 2} r={r} stroke={track} strokeWidth={stroke} fill="none" />
+        {value > 0 ? (
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            stroke={color}
+            strokeWidth={stroke}
+            fill="none"
+            strokeLinecap="round"
+            strokeDasharray={`${c} ${c}`}
+            strokeDashoffset={c * (1 - value)}
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          />
+        ) : null}
       </Svg>
-      <Txt weight="extrabold" size={30} color="#fff">
-        {Math.round(value * 100)}%
-      </Txt>
-      <Txt size={11} color="rgba(255,255,255,0.7)">
-        Overall
-      </Txt>
+      <Txt weight="semibold" size={24} color={text}>{Math.round(value * 100)}%</Txt>
+      <Txt size={10.5} color={muted}>overall</Txt>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  hero: { flexDirection: 'row', alignItems: 'center', borderRadius: 26, padding: 20, marginTop: 20 },
-  heroIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
+  overview: { flexDirection: 'row', alignItems: 'center', gap: 22, padding: 18, marginTop: 22, borderRadius: 24 },
+  mini: { flexDirection: 'row', gap: 10, marginTop: 12, marginBottom: 26 },
+  miniStat: { flex: 1, borderRadius: 20, padding: 14, gap: 4 },
+  miniIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   bRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth },
 });

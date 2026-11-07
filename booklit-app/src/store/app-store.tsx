@@ -2,8 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
 
-import { DarkPalette, LightPalette, type Palette } from '@/constants/theme';
-import type { StageId } from '@/data/types';
+import { DarkPalette, LightPalette, type Palette, type ReaderTheme } from '@/constants/theme';
+import { setImportedContent } from '@/data/content';
+import type { ImportedBooklet, StageId } from '@/data/types';
 
 export type Appearance = 'system' | 'light' | 'dark';
 
@@ -15,6 +16,11 @@ type Persisted = {
   language: 'English' | 'العربية';
   notifications: boolean;
   fontScale: number;
+  /** 'auto' follows the app's light/dark appearance. */
+  readerTheme: ReaderTheme | 'auto';
+  importedBooklets: ImportedBooklet[];
+  /** ISO dates (YYYY-MM-DD) on which the student studied, for the streak. */
+  studyDays: string[];
   favoriteBooklets: string[];
   favoriteTopics: string[];
   completedTopics: string[];
@@ -35,6 +41,9 @@ const DEFAULTS: Persisted = {
   language: 'English',
   notifications: true,
   fontScale: 1,
+  readerTheme: 'auto',
+  importedBooklets: [],
+  studyDays: [],
   favoriteBooklets: [],
   favoriteTopics: [],
   completedTopics: [],
@@ -65,9 +74,27 @@ type Store = Persisted & {
   recordAnswer: (correct: boolean) => void;
   addStudySeconds: (s: number) => void;
   logOut: () => void;
+  addImported: (b: ImportedBooklet) => void;
+  removeImported: (id: string) => void;
+  streak: number;
+  contentVersion: number;
 };
 
 const Ctx = createContext<Store | null>(null);
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+function computeStreak(days: string[]) {
+  const set = new Set(days);
+  const d = new Date();
+  if (!set.has(d.toISOString().slice(0, 10))) d.setDate(d.getDate() - 1); // today not studied yet: count up to yesterday
+  let n = 0;
+  while (set.has(d.toISOString().slice(0, 10))) {
+    n++;
+    d.setDate(d.getDate() - 1);
+  }
+  return n;
+}
 
 const toggle = (arr: string[], id: string) => (arr.includes(id) ? arr.filter((x) => x !== id) : [id, ...arr]);
 
@@ -97,6 +124,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const update = useCallback((fn: (s: Persisted) => Partial<Persisted>) => {
     setState((s) => ({ ...s, ...fn(s) }));
   }, []);
+
+  // Keep the shared content arrays in sync with the student's uploads before children render.
+  const contentVersion = useMemo(() => {
+    setImportedContent(state.importedBooklets);
+    return state.importedBooklets.length;
+  }, [state.importedBooklets]);
 
   const isDark = state.appearance === 'dark' || (state.appearance === 'system' && scheme === 'dark');
 
@@ -132,10 +165,23 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         })),
       recordAnswer: (correct) =>
         update((s) => ({ quiz: { answered: s.quiz.answered + 1, correct: s.quiz.correct + (correct ? 1 : 0) } })),
-      addStudySeconds: (sec) => update((s) => ({ studySeconds: s.studySeconds + sec })),
+      addStudySeconds: (sec) =>
+        update((s) => ({
+          studySeconds: s.studySeconds + sec,
+          studyDays: s.studyDays.includes(today()) ? s.studyDays : [...s.studyDays, today()].slice(-400),
+        })),
+      addImported: (b) => update((s) => ({ importedBooklets: [b, ...s.importedBooklets.filter((x) => x.id !== b.id)] })),
+      removeImported: (id) =>
+        update((s) => ({
+          importedBooklets: s.importedBooklets.filter((x) => x.id !== id),
+          favoriteBooklets: s.favoriteBooklets.filter((x) => x !== id),
+          lastRead: s.lastRead?.topicId.startsWith(`${id}--`) ? null : s.lastRead,
+        })),
+      streak: computeStreak(state.studyDays),
+      contentVersion,
       logOut: () => setState({ ...DEFAULTS, appearance: state.appearance }),
     }),
-    [state, ready, isDark, update],
+    [state, ready, isDark, update, contentVersion],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

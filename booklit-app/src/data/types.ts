@@ -37,7 +37,8 @@ export type Topic = {
   blocks: ContentBlock[];
 };
 
-export type McqSource = 'ministry' | 'instructor';
+/** 'generated' = practice questions created by AI for uploaded files. */
+export type McqSource = 'ministry' | 'instructor' | 'generated';
 
 export type Mcq = {
   id: string;
@@ -47,4 +48,15 @@ export type Mcq = {
   options: string[];
   answerIndex: number;
   explanation: string;
+};
+
+/** A booklet built by AI from a file the student uploaded (PDF, Word, slides, image, text). */
+export type ImportedBooklet = {
+  id: string;
+  title: string;
+  fileName: string;
+  language: string;
+  createdAt: number;
+  topics: Topic[];
+  mcqs: Mcq[];
 };

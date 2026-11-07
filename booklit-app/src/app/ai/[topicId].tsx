@@ -1,16 +1,31 @@
 import { useLocalSearchParams } from 'expo-router';
+import { BookOpen, Bot, Languages, ListChecks, Send, Sparkles, WandSparkles } from 'lucide-react-native';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View, type ScrollViewInstance } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+  type ScrollViewInstance,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ScreenBar } from '@/components/screen-bar';
-import { Icon, IconBadge, Txt } from '@/components/ui';
-import { Font } from '@/constants/theme';
+import { Heading, Icon, TopBar, Txt, type LucideIcon } from '@/components/ui';
+import { Font, Type } from '@/constants/theme';
 import { getBooklet, getSubject, getTopic } from '@/data/content';
-import { aiConfigured, askAI, type ChatMessage } from '@/lib/ai';
+import { askAI, type ChatMessage } from '@/lib/ai';
 import { useApp } from '@/store/app-store';
 
-const SUGGESTIONS = ['Explain this topic simply', 'Summarize the key points', 'Give me 3 exam questions', 'What do examiners usually ask?'];
+const SUGGESTIONS: { label: string; prompt: string; icon: LucideIcon }[] = [
+  { label: 'Explain simply', prompt: 'Explain this topic simply.', icon: WandSparkles },
+  { label: 'Key points', prompt: 'Summarize the key points I must remember.', icon: ListChecks },
+  { label: 'Exam questions', prompt: 'Give me 3 likely exam questions with short answers.', icon: Sparkles },
+  { label: 'اشرح بالعربي', prompt: 'اشرح لي هذا الموضوع بالعربي بشكل مبسط.', icon: Languages },
+];
 
 export default function AskAI() {
   const { topicId } = useLocalSearchParams<{ topicId: string }>();
@@ -24,7 +39,7 @@ export default function AskAI() {
   const [loading, setLoading] = useState(false);
   const scroll = useRef<ScrollViewInstance>(null);
 
-  if (!topic || !subject) return <ScreenBar title="Ask AI" />;
+  if (!topic || !subject) return <TopBar title="Ask AI" />;
 
   const send = async (text: string) => {
     const t = text.trim();
@@ -33,6 +48,7 @@ export default function AskAI() {
     setMessages(history);
     setInput('');
     setLoading(true);
+    setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50);
     try {
       const answer = await askAI(topic, history);
       setMessages([...history, { role: 'assistant', content: answer }]);
@@ -40,85 +56,119 @@ export default function AskAI() {
       setMessages([...history, { role: 'assistant', content: `Sorry, I couldn't answer right now. ${(e as Error).message}` }]);
     } finally {
       setLoading(false);
-      setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50);
+      setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 80);
     }
   };
 
+  const empty = messages.length === 0;
+
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: p.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScreenBar title="Ask AI" />
-      <View style={[styles.context, { backgroundColor: p.primarySoft }]}>
-        <Icon name="book-open-variant" size={18} color={p.primary} />
-        <Txt size={13} weight="medium" style={{ flex: 1 }} numberOfLines={1}>
-          {subject.name} · {topic.title}
-        </Txt>
-        {!aiConfigured ? (
-          <Txt size={11} weight="semibold" color={p.primary}>DEMO</Txt>
-        ) : null}
-      </View>
-      <ScrollView ref={scroll} contentContainerStyle={{ padding: 16, gap: 10, flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-        {messages.length === 0 ? (
-          <View style={{ alignItems: 'center', paddingTop: 30, gap: 8 }}>
-            <IconBadge name="robot-happy-outline" size={68} />
-            <Txt weight="bold" size={19} style={{ marginTop: 8 }}>
-              Ask about {subject.name}
-            </Txt>
-            <Txt muted style={{ textAlign: 'center', lineHeight: 21, paddingHorizontal: 20 }}>
-              I know the topic you have open ({topic.title}). Ask anything, in English or Arabic.
-            </Txt>
-            <View style={styles.suggest}>
-              {SUGGESTIONS.map((s) => (
-                <Pressable key={s} onPress={() => send(s)} style={[styles.sChip, { borderColor: p.border, backgroundColor: p.surface }]}>
-                  <Txt size={13} weight="medium">{s}</Txt>
-                </Pressable>
-              ))}
+      <TopBar
+        right={
+          <View style={[styles.badge, { backgroundColor: p.surface }]}>
+            <Icon as={Sparkles} size={14} color={p.primary} />
+            <Txt weight="medium" size={Type.tiny}>AI Study Buddy</Txt>
+          </View>
+        }
+      />
+      <ScrollView ref={scroll} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 16, flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+        {empty ? (
+          <View style={styles.hero}>
+            <View style={[styles.orbOuter, { backgroundColor: p.primarySoft }]}>
+              <View style={[styles.orbMid, { backgroundColor: p.primary + '33' }]}>
+                <View style={[styles.orb, { backgroundColor: p.primary }]}>
+                  <Icon as={Bot} size={30} color="#fff" />
+                </View>
+              </View>
+            </View>
+            <View style={{ marginTop: 28, alignItems: 'center' }}>
+              <Heading light="How can I help" strong="you today?" size={26} />
+            </View>
+            <View style={[styles.context, { backgroundColor: p.surface }]}>
+              <Icon as={BookOpen} size={14} color={p.primary} />
+              <Txt size={Type.tiny} weight="medium" numberOfLines={1}>{subject.name} · {topic.title}</Txt>
             </View>
           </View>
-        ) : null}
-        {messages.map((m, i) => (
-          <View
-            key={i}
-            style={[
-              styles.bubble,
-              m.role === 'user'
-                ? { alignSelf: 'flex-end', backgroundColor: p.primary, borderBottomRightRadius: 6 }
-                : { alignSelf: 'flex-start', backgroundColor: p.surface, borderColor: p.border, borderWidth: StyleSheet.hairlineWidth, borderBottomLeftRadius: 6 },
-            ]}>
-            <Txt color={m.role === 'user' ? '#fff' : p.text} style={{ lineHeight: 22 }} selectable>
-              {m.content}
-            </Txt>
+        ) : (
+          <View style={{ gap: 10, paddingTop: 8 }}>
+            {messages.map((m, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.bubble,
+                  m.role === 'user'
+                    ? { alignSelf: 'flex-end', backgroundColor: p.ink, borderBottomRightRadius: 6 }
+                    : { alignSelf: 'flex-start', backgroundColor: p.surface, borderBottomLeftRadius: 6 },
+                ]}>
+                <Txt
+                  color={m.role === 'user' ? p.onInk : p.text}
+                  style={{ lineHeight: 22, writingDirection: /[؀-ۿ]/.test(m.content.slice(0, 40)) ? 'rtl' : 'auto' }}
+                  selectable>
+                  {m.content}
+                </Txt>
+              </View>
+            ))}
+            {loading ? (
+              <View style={[styles.bubble, { alignSelf: 'flex-start', backgroundColor: p.surface, flexDirection: 'row', gap: 8, alignItems: 'center' }]}>
+                <ActivityIndicator color={p.primary} size="small" />
+                <Txt muted size={Type.small}>Thinking…</Txt>
+              </View>
+            ) : null}
           </View>
-        ))}
-        {loading ? (
-          <View style={[styles.bubble, { alignSelf: 'flex-start', backgroundColor: p.surface, flexDirection: 'row', gap: 8, alignItems: 'center' }]}>
-            <ActivityIndicator color={p.primary} />
-            <Txt muted>Thinking…</Txt>
-          </View>
-        ) : null}
+        )}
       </ScrollView>
-      <View style={[styles.inputRow, { paddingBottom: insets.bottom + 10, backgroundColor: p.surface, borderTopColor: p.border }]}>
-        <TextInput
-          value={input}
-          onChangeText={setInput}
-          placeholder="Ask a question about this subject…"
-          placeholderTextColor={p.textMuted}
-          multiline
-          style={[styles.input, { color: p.text, backgroundColor: p.surfaceAlt, fontFamily: Font.medium }]}
-        />
-        <Pressable onPress={() => send(input)} style={[styles.send, { backgroundColor: input.trim() ? p.primary : p.border }]} accessibilityLabel="Send">
-          <Icon name="send" size={20} color="#fff" />
-        </Pressable>
+
+      <View style={{ paddingBottom: insets.bottom + 10 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggest} keyboardShouldPersistTaps="handled">
+          {SUGGESTIONS.map((s) => (
+            <Pressable key={s.label} onPress={() => send(s.prompt)} style={({ pressed }) => [styles.sChip, { backgroundColor: p.surface, borderColor: p.border }, pressed && { opacity: 0.8 }]}>
+              <Icon as={s.icon} size={14} color={p.primary} />
+              <Txt size={Type.small} weight="medium">{s.label}</Txt>
+            </Pressable>
+          ))}
+        </ScrollView>
+        <View style={[styles.inputCard, { backgroundColor: p.surface, borderColor: p.border }]}>
+          <TextInput
+            value={input}
+            onChangeText={setInput}
+            placeholder="Ask a question…"
+            placeholderTextColor={p.textFaint}
+            multiline
+            style={[styles.input, { color: p.text, fontFamily: Font.regular }]}
+          />
+          <View style={styles.inputRow}>
+            <View style={[styles.pill, { backgroundColor: p.surfaceAlt }]}>
+              <Icon as={BookOpen} size={13} color={p.textMuted} />
+              <Txt size={Type.tiny} muted numberOfLines={1} style={{ maxWidth: 180 }}>{topic.title}</Txt>
+            </View>
+            <Pressable
+              onPress={() => send(input)}
+              disabled={!input.trim() || loading}
+              style={[styles.send, { backgroundColor: input.trim() ? p.primary : p.surfaceAlt }]}
+              accessibilityLabel="Send">
+              <Icon as={Send} size={17} color={input.trim() ? '#fff' : p.textFaint} />
+            </Pressable>
+          </View>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  context: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginTop: 12, padding: 10, borderRadius: 12 },
-  suggest: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginTop: 14 },
-  sChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
-  bubble: { maxWidth: '86%', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
-  inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, paddingHorizontal: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
-  input: { flex: 1, maxHeight: 120, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15 },
-  send: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 999 },
+  hero: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 30 },
+  orbOuter: { width: 150, height: 150, borderRadius: 75, alignItems: 'center', justifyContent: 'center' },
+  orbMid: { width: 108, height: 108, borderRadius: 54, alignItems: 'center', justifyContent: 'center' },
+  orb: { width: 70, height: 70, borderRadius: 35, alignItems: 'center', justifyContent: 'center' },
+  context: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, marginTop: 16, maxWidth: '90%' },
+  bubble: { maxWidth: '86%', borderRadius: 20, paddingHorizontal: 15, paddingVertical: 11 },
+  suggest: { gap: 8, paddingHorizontal: 20, paddingBottom: 10 },
+  sChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8 },
+  inputCard: { marginHorizontal: 16, borderRadius: 24, borderWidth: 1, padding: 12 },
+  input: { minHeight: 40, maxHeight: 120, fontSize: 14.5, paddingHorizontal: 4, paddingTop: 4 },
+  inputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
+  send: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
 });

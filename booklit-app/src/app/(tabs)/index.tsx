@@ -1,159 +1,171 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Bell, BookOpen, Bot, FileUp, LibraryBig, Play, Search, Sparkles } from 'lucide-react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Card, Icon, ProgressBar, SectionTitle, SubjectArt, Txt, shade } from '@/components/ui';
-import { booklets, getBooklet, getSubject, getTopic, subjects, topicsOf } from '@/data/content';
-import { bookletProgress, greeting, startedBooklets } from '@/lib/progress';
+import { ArrowCircle, Card, CircleButton, Heading, Icon, Page, ProgressBar, SectionTitle, SubjectThumb, Txt } from '@/components/ui';
+import { Type } from '@/constants/theme';
+import { booklets, getBooklet, getSubject, getTopic, topicsOf } from '@/data/content';
+import { bookletProgress, greeting, initials, isSubjectUnlocked, startedBooklets } from '@/lib/progress';
 import { useApp } from '@/store/app-store';
 
 export default function Home() {
-  const { profile, lastRead, completedTopics, topicProgress, palette: p } = useApp();
+  const app = useApp();
+  const { profile, lastRead, completedTopics, topicProgress, palette: p } = app;
+  const first = profile?.name.split(' ')[0] ?? '';
 
   const lastTopic = lastRead ? getTopic(lastRead.topicId) : undefined;
   const lastBooklet = lastTopic ? getBooklet(lastTopic.bookletId) : undefined;
   const lastSubject = lastBooklet ? getSubject(lastBooklet.subjectId) : undefined;
   const lastPct = lastBooklet ? bookletProgress(lastBooklet.id, completedTopics, topicProgress).pct : 0;
 
-  const started = startedBooklets(subjects.map((s) => s.id), completedTopics, topicProgress);
-  const studying = (started.length ? started : suggested(profile?.stageId)).slice(0, 5);
+  const started = startedBooklets(
+    [...new Set(booklets.map((b) => b.subjectId))],
+    completedTopics,
+    topicProgress,
+  );
+  const suggested = booklets.filter((b) => {
+    const s = getSubject(b.subjectId);
+    return s && s.id !== 'uploads' && isSubjectUnlocked(s.id, app.unlockedSubjects) && s.stageId === profile?.stageId && b.order === 1;
+  });
+  const list = (started.length ? started : suggested).slice(0, 4);
 
-  const firstTopic = (bookletId: string) => {
+  const nextTopicOf = (bookletId: string) => {
     const ts = topicsOf(bookletId);
     return ts.find((t) => !completedTopics.includes(t.id)) ?? ts[0];
   };
+  const openReader = (topicId: string) => router.push({ pathname: '/reader/[topicId]', params: { topicId } });
 
   return (
-    <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <Txt muted size={16}>
-        {greeting()},
-      </Txt>
-      <Txt weight="extrabold" size={30} style={{ marginTop: 2, letterSpacing: -0.5 }}>
-        {profile?.name}
-      </Txt>
-
-      <Pressable onPress={() => router.push('/search')} style={[styles.search, { backgroundColor: p.surface, borderColor: p.border }]}>
-        <Icon name="magnify" size={22} />
-        <Txt muted>Search for booklets, topics, or MCQs...</Txt>
-      </Pressable>
-
-      {/* Continue reading */}
-      <Pressable
-        onPress={() =>
-          lastTopic
-            ? router.push({ pathname: '/reader/[topicId]', params: { topicId: lastTopic.id } })
-            : router.push('/library')
-        }>
-        <LinearGradient
-          colors={lastSubject ? [shade(lastSubject.color, -0.35), lastSubject.color, shade(lastSubject.color, 0.25)] : ['#3B2C9E', '#493BEA', '#8C6CF5']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.hero}>
-          <MaterialCommunityIcons
-            name={(lastSubject?.icon ?? 'book-open-page-variant-outline') as never}
-            size={150}
-            color="rgba(255,255,255,0.16)"
-            style={styles.heroArt}
-          />
-          <Txt weight="semibold" size={12} color="rgba(255,255,255,0.8)" style={{ letterSpacing: 1.2 }}>
-            {lastTopic ? 'CONTINUE READING' : 'START READING'}
-          </Txt>
-          <Txt weight="bold" size={21} color="#fff" style={{ marginTop: 8 }}>
-            {lastSubject?.name ?? 'Pick your first booklet'}
-          </Txt>
-          <Txt weight="bold" size={21} color="#fff" numberOfLines={1}>
-            {lastTopic ? lastBooklet?.title : 'Browse the library'}
-          </Txt>
-          {lastTopic ? (
-            <View style={styles.heroProgress}>
-              <View style={{ flex: 1 }}>
-                <ProgressBar value={lastPct} color="#fff" track="rgba(255,255,255,0.25)" />
-              </View>
-              <Txt weight="semibold" size={13} color="#fff">
-                {Math.round(lastPct * 100)}%
-              </Txt>
-            </View>
-          ) : null}
-          <View style={styles.heroBtn}>
-            <MaterialCommunityIcons name="play" size={18} color={p.primary} />
-            <Txt weight="semibold" color="#17172B">
-              {lastTopic ? 'Continue' : 'Open Library'}
+    <Page>
+      {/* Top row */}
+      <View style={styles.top}>
+        <Pressable onPress={() => router.push('/profile')} style={[styles.hello, { backgroundColor: p.surface, borderColor: p.border }]}>
+          <View style={[styles.avatar, { backgroundColor: p.primarySoft }]}>
+            <Txt weight="semibold" size={12} color={p.primary}>
+              {initials(profile?.name ?? '')}
             </Txt>
           </View>
-        </LinearGradient>
-      </Pressable>
-
-      {/* Shortcuts */}
-      <View style={styles.shortcuts}>
-        {[
-          { label: 'All Booklets', icon: 'layers-outline', stage: 'all' },
-          { label: 'Fifth Stage', icon: 'school-outline', stage: 'stage5' },
-          { label: 'Fourth Stage', icon: 'book-open-variant', stage: 'stage4' },
-          { label: 'Categories', icon: 'view-grid-outline', stage: 'all' },
-        ].map((s) => (
-          <Pressable
-            key={s.label}
-            onPress={() => router.push({ pathname: '/library', params: { stage: s.stage } })}
-            style={({ pressed }) => [styles.shortcut, { backgroundColor: p.primarySoft, opacity: pressed ? 0.8 : 1 }]}>
-            <Icon name={s.icon} size={26} color={p.primary} />
-            <Txt weight="semibold" size={12} style={{ textAlign: 'center' }} numberOfLines={1}>
-              {s.label}
-            </Txt>
-          </Pressable>
-        ))}
+          <Txt weight="medium" size={Type.small}>
+            {greeting()}, {first}
+          </Txt>
+        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <CircleButton icon={Sparkles} variant="primary" label="Ask AI" onPress={() => lastTopic ? router.push({ pathname: '/ai/[topicId]', params: { topicId: lastTopic.id } }) : router.push('/library')} />
+          <CircleButton icon={Bell} label="Notifications" badge={app.notifications} onPress={() => router.push('/notifications')} />
+        </View>
       </View>
 
-      <SectionTitle title={started.length ? 'Continue Studying' : 'Suggested for You'} action="View All" onAction={() => router.push('/progress')} />
-      <Card style={{ paddingHorizontal: 14 }}>
-        {studying.map((b, i) => {
-          const s = getSubject(b.subjectId)!;
+      <View style={{ marginTop: 22 }}>
+        <Heading light="Ready to" strong="study today?" />
+      </View>
+
+      {/* Search + quick actions */}
+      <View style={styles.actions}>
+        <Pressable onPress={() => router.push('/search')} style={[styles.search, { borderColor: p.border, backgroundColor: p.surface }]}>
+          <Icon as={Search} size={17} color={p.textMuted} />
+          <Txt muted size={Type.small}>Search booklets</Txt>
+        </Pressable>
+        <CircleButton icon={FileUp} label="Upload a file" onPress={() => router.push('/import')} />
+        <CircleButton icon={LibraryBig} label="Library" onPress={() => router.push('/library')} />
+      </View>
+
+      {/* Continue card */}
+      <LinearGradient colors={['#5B4CF0', '#493BEA', '#3A2FD0']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+        <View style={styles.heroRow}>
+          <View style={styles.heroIcon}>
+            <Icon as={BookOpen} size={20} color="#fff" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Txt weight="semibold" size={Type.h2} color="#fff" numberOfLines={1}>
+              {lastTopic ? lastBooklet?.title : 'Start your first booklet'}
+            </Txt>
+            <Txt size={Type.small} color="rgba(255,255,255,0.75)" numberOfLines={1}>
+              {lastTopic ? `${lastSubject?.name} · ${lastTopic.title}` : 'Pick a subject from the library'}
+            </Txt>
+          </View>
+        </View>
+        {lastTopic ? (
+          <View style={styles.heroProgress}>
+            <View style={{ flex: 1 }}>
+              <ProgressBar value={lastPct} color="#fff" track="rgba(255,255,255,0.22)" />
+            </View>
+            <Txt weight="medium" size={Type.tiny} color="rgba(255,255,255,0.85)">
+              {Math.round(lastPct * 100)}%
+            </Txt>
+          </View>
+        ) : null}
+        <Pressable
+          onPress={() => (lastTopic ? openReader(lastTopic.id) : router.push('/library'))}
+          style={({ pressed }) => [styles.heroBtn, pressed && { opacity: 0.9 }]}>
+          <Icon as={Play} size={15} color="#17172B" />
+          <Txt weight="semibold" size={Type.small} color="#17172B">
+            {lastTopic ? 'Continue reading' : 'Open library'}
+          </Txt>
+        </Pressable>
+      </LinearGradient>
+
+      {/* Tiles */}
+      <View style={styles.tiles}>
+        <Tile icon={LibraryBig} label="Library" onPress={() => router.push('/library')} />
+        <Tile icon={Bot} label="Ask AI" active onPress={() => (lastTopic ? router.push({ pathname: '/ai/[topicId]', params: { topicId: lastTopic.id } }) : router.push('/library'))} />
+        <Tile icon={FileUp} label="Upload file" onPress={() => router.push('/import')} />
+      </View>
+
+      <SectionTitle title={started.length ? 'Continue studying' : 'Suggested for you'} action="View all" onAction={() => router.push('/progress')} />
+      <View style={{ gap: 10 }}>
+        {list.map((b) => {
           const pr = bookletProgress(b.id, completedTopics, topicProgress);
-          const t = firstTopic(b.id);
+          const s = getSubject(b.subjectId)!;
+          const t = nextTopicOf(b.id);
           return (
-            <Pressable
-              key={b.id}
-              onPress={() => router.push({ pathname: '/reader/[topicId]', params: { topicId: t.id } })}
-              style={[styles.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: p.border }]}>
-              <SubjectArt color={s.color} icon={s.icon} size={56} />
-              <View style={{ flex: 1 }}>
-                <Txt weight="bold" size={16} numberOfLines={1}>
-                  {s.name}
+            <Card key={b.id} style={styles.row} onPress={() => t && openReader(t.id)}>
+              <SubjectThumb subjectId={s.id} size={48} radius={14} />
+              <View style={{ flex: 1, gap: 3 }}>
+                <Txt weight="semibold" numberOfLines={1}>{b.title}</Txt>
+                <Txt muted size={Type.tiny} numberOfLines={1}>
+                  {s.name} · {pr.done}/{pr.total} topics
                 </Txt>
-                <Txt muted size={13} numberOfLines={1}>
-                  {b.title}
-                </Txt>
+                <View style={{ marginTop: 4, width: '80%' }}>
+                  <ProgressBar value={pr.pct} />
+                </View>
               </View>
-              <View style={{ width: 88, gap: 6 }}>
-                <Txt weight="semibold" size={13}>
-                  {Math.round(pr.pct * 100)}%
-                </Txt>
-                <ProgressBar value={pr.pct} />
-              </View>
-              <Icon name="chevron-right" />
-            </Pressable>
+              <ArrowCircle onPress={() => t && openReader(t.id)} />
+            </Card>
           );
         })}
-      </Card>
-    </ScrollView>
+      </View>
+    </Page>
   );
 }
 
-function suggested(stageId?: string) {
-  return booklets.filter((b) => {
-    const s = getSubject(b.subjectId);
-    return s && s.isFree && (!stageId || s.stageId === stageId) && b.order === 1;
-  });
+function Tile({ icon, label, onPress, active }: { icon: Parameters<typeof Icon>[0]['as']; label: string; onPress: () => void; active?: boolean }) {
+  const { palette: p } = useApp();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.tile, { backgroundColor: active ? p.primarySoft : p.surface }, pressed && { opacity: 0.85 }]}>
+      <View style={[styles.tileIcon, { backgroundColor: active ? p.surface : p.primarySoft }]}>
+        <Icon as={icon} size={19} color={p.primary} />
+      </View>
+      <Txt weight="medium" size={Type.small}>{label}</Txt>
+    </Pressable>
+  );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 18, paddingBottom: 32 },
-  search: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 13, marginTop: 16 },
-  hero: { borderRadius: 24, padding: 20, marginTop: 18, overflow: 'hidden', minHeight: 190 },
-  heroArt: { position: 'absolute', right: -12, bottom: -18 },
-  heroProgress: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14, width: '70%' },
-  heroBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: '#fff', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 999, marginTop: 16 },
-  shortcuts: { flexDirection: 'row', gap: 10, marginVertical: 20 },
-  shortcut: { flex: 1, alignItems: 'center', gap: 8, paddingVertical: 16, borderRadius: 18 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  hello: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 5, paddingRight: 14, paddingVertical: 5, borderRadius: 999, borderWidth: 1 },
+  avatar: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 18 },
+  search: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, height: 44, paddingHorizontal: 16, borderRadius: 22, borderWidth: 1 },
+  hero: { borderRadius: 24, padding: 18, marginTop: 20 },
+  heroRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  heroIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
+  heroProgress: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16 },
+  heroBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#fff', borderRadius: 999, paddingVertical: 11, marginTop: 16 },
+  tiles: { flexDirection: 'row', gap: 10, marginTop: 16, marginBottom: 24 },
+  tile: { flex: 1, alignItems: 'center', gap: 10, paddingVertical: 16, borderRadius: 20 },
+  tileIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 20 },
 });

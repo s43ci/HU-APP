@@ -1,9 +1,9 @@
 import {
+  PlusJakartaSans_300Light,
   PlusJakartaSans_400Regular,
   PlusJakartaSans_500Medium,
   PlusJakartaSans_600SemiBold,
   PlusJakartaSans_700Bold,
-  PlusJakartaSans_800ExtraBold,
   useFonts,
 } from '@expo-google-fonts/plus-jakarta-sans';
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
@@ -18,11 +18,11 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
+    PlusJakartaSans_300Light,
     PlusJakartaSans_400Regular,
     PlusJakartaSans_500Medium,
     PlusJakartaSans_600SemiBold,
     PlusJakartaSans_700Bold,
-    PlusJakartaSans_800ExtraBold,
   });
   return (
     <AppStoreProvider>
@@ -46,13 +46,14 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
 
   return (
     <ThemeProvider value={theme}>
-      <StatusBar style="light" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.bg } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="welcome" options={{ gestureEnabled: false }} />
         <Stack.Screen name="reader/[topicId]" />
-        <Stack.Screen name="quiz/[topicId]" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="ai/[topicId]" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="quiz/[topicId]" />
+        <Stack.Screen name="ai/[topicId]" />
+        <Stack.Screen name="import" options={{ presentation: 'modal' }} />
       </Stack>
     </ThemeProvider>
   );

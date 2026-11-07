@@ -35,3 +35,7 @@ export function greeting(d = new Date()) {
   const h = d.getHours();
   return h < 12 ? 'Good Morning' : h < 18 ? 'Good Afternoon' : 'Good Evening';
 }
+
+export function initials(name: string) {
+  return name.split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+}

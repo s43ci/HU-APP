@@ -1,104 +1,124 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { FileUp, Lock, Plus, Search } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { LockedModal } from '@/components/locked-modal';
-import { Card, Chip, Icon, SubjectArt, Txt } from '@/components/ui';
-import { stages, subjects, topicsOfSubject } from '@/data/content';
+import { ArrowCircle, Card, Chip, CircleButton, Heading, Icon, Page, SectionTitle, SubjectThumb, Txt } from '@/components/ui';
+import { Type } from '@/constants/theme';
+import { bookletsOf, courseSubjects, stages, topicsOf, topicsOfSubject, UPLOADS_SUBJECT } from '@/data/content';
 import type { Subject } from '@/data/types';
 import { isSubjectUnlocked } from '@/lib/progress';
 import { useApp } from '@/store/app-store';
 
 type StageFilter = 'all' | 'stage4' | 'stage5';
-type TypeFilter = 'all' | 'free' | 'premium';
-const TYPE_LABEL: Record<TypeFilter, string> = { all: 'All Types', free: 'Free', premium: 'Premium' };
 
 export default function Library() {
   const params = useLocalSearchParams<{ stage?: string }>();
-  const { unlockedSubjects, palette: p } = useApp();
+  const app = useApp();
+  const p = app.palette;
+  const { width } = useWindowDimensions();
+  const cols = width >= 700 ? 3 : 2;
+  const cardW = (Math.min(width, 900) - 40 - 12 * (cols - 1)) / cols;
+
   const paramStage: StageFilter = params.stage === 'stage4' || params.stage === 'stage5' ? params.stage : 'all';
-  // The stage chip follows the URL param (Home shortcuts) until the user taps a chip.
+  // The chip follows the URL param (Home shortcuts) until the student taps a chip.
   const [sel, setSel] = useState<{ param?: string; value: StageFilter }>({ param: params.stage, value: paramStage });
   const stage = sel.param === params.stage ? sel.value : paramStage;
   const setStage = (value: StageFilter) => setSel({ param: params.stage, value });
-  const [type, setType] = useState<TypeFilter>('all');
   const [locked, setLocked] = useState<Subject | null>(null);
-  const { width } = useWindowDimensions();
-  const cols = width >= 700 ? 3 : 2;
 
-  const list = subjects.filter(
-    (s) =>
-      (stage === 'all' || s.stageId === stage) &&
-      (type === 'all' || (type === 'free' ? s.isFree : !s.isFree)),
-  );
+  const list = courseSubjects().filter((s) => stage === 'all' || s.stageId === stage);
+  const uploads = bookletsOf(UPLOADS_SUBJECT.id);
 
-  const nextType = () => setType((t) => (t === 'all' ? 'free' : t === 'free' ? 'premium' : 'all'));
+  const open = (s: Subject) =>
+    isSubjectUnlocked(s.id, app.unlockedSubjects) ? router.push({ pathname: '/subject/[id]', params: { id: s.id } }) : setLocked(s);
 
   return (
-    <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <Txt weight="extrabold" size={32} style={{ letterSpacing: -0.5 }}>
-        Library
-      </Txt>
-      <Txt muted size={15} style={{ marginTop: 4 }}>
-        Browse all booklets by subject
-      </Txt>
+    <Page>
+      <View style={styles.top}>
+        <Txt weight="medium" muted size={Type.small}>Library</Txt>
+        <CircleButton icon={FileUp} label="Upload a file" onPress={() => router.push('/import')} />
+      </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+      <View style={styles.headRow}>
+        <View style={{ flex: 1 }}>
+          <Heading light="Find your" strong="next booklet." />
+        </View>
+        <CircleButton icon={Search} label="Search" size={52} onPress={() => router.push('/search')} />
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} style={{ marginHorizontal: -20 }}>
         <Chip label="All" active={stage === 'all'} onPress={() => setStage('all')} />
         {stages.map((s) => (
           <Chip key={s.id} label={s.name} active={stage === s.id} onPress={() => setStage(s.id)} />
         ))}
-        <Pressable onPress={nextType} style={[styles.typeBtn, { borderColor: p.border, backgroundColor: p.surface }]}>
-          <Txt weight="medium" size={14}>
-            {TYPE_LABEL[type]}
-          </Txt>
-          <Icon name="chevron-down" size={18} />
-        </Pressable>
       </ScrollView>
 
+      <SectionTitle title="Subjects" action={`${list.length} subjects`} />
       <View style={styles.grid}>
         {list.map((s) => {
-          const open = isSubjectUnlocked(s.id, unlockedSubjects);
+          const lockedS = !isSubjectUnlocked(s.id, app.unlockedSubjects);
           return (
-            <View key={s.id} style={{ width: `${100 / cols}%`, padding: 5 }}>
-              <Card
-                style={styles.card}
-                onPress={() => (open ? router.push({ pathname: '/subject/[id]', params: { id: s.id } }) : setLocked(s))}>
-                <SubjectArt color={s.color} icon={s.icon} size={56} radius={15} />
-                <View style={{ gap: 2 }}>
-                  <Txt weight="bold" size={15.5} numberOfLines={2}>
-                    {s.name}
-                  </Txt>
-                  <Txt muted size={12.5}>
-                    {topicsOfSubject(s.id).length} Topics
-                  </Txt>
-                </View>
-                {!open ? (
-                  <View style={[styles.lock, { backgroundColor: p.primarySoft }]}>
-                    <Icon name="lock" size={14} color={p.primary} />
+            <Pressable key={s.id} onPress={() => open(s)} style={({ pressed }) => [{ width: cardW }, pressed && { opacity: 0.88, transform: [{ scale: 0.985 }] }]}>
+              <View style={[styles.subjectCard, { backgroundColor: p.surface }]}>
+                <SubjectThumb subjectId={s.id} width={cardW - 12} height={cardW * 0.78} radius={18} />
+                <View style={styles.subjectMeta}>
+                  <View style={{ flex: 1 }}>
+                    <Txt weight="semibold" size={Type.small + 0.5} numberOfLines={1}>{s.name}</Txt>
+                    <Txt muted size={Type.tiny}>{topicsOfSubject(s.id).length} topics</Txt>
                   </View>
-                ) : null}
-              </Card>
-            </View>
+                  {lockedS ? (
+                    <View style={[styles.lockDot, { backgroundColor: p.surfaceAlt }]}>
+                      <Icon as={Lock} size={13} color={p.textMuted} />
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            </Pressable>
           );
         })}
       </View>
-      {!list.length ? (
-        <Txt muted style={{ textAlign: 'center', marginTop: 40 }}>
-          No subjects match these filters.
-        </Txt>
-      ) : null}
+
+      <View style={{ marginTop: 26 }}>
+        <SectionTitle title="My uploads" action={uploads.length ? `${uploads.length} files` : undefined} />
+      </View>
+      <View style={{ gap: 10 }}>
+        {uploads.map((b) => (
+          <Card key={b.id} style={styles.uploadRow} onPress={() => router.push({ pathname: '/subject/[id]', params: { id: UPLOADS_SUBJECT.id, booklet: b.id } })}>
+            <SubjectThumb subjectId={UPLOADS_SUBJECT.id} size={46} radius={14} />
+            <View style={{ flex: 1 }}>
+              <Txt weight="semibold" numberOfLines={1}>{b.title}</Txt>
+              <Txt muted size={Type.tiny}>{topicsOf(b.id).length} topics</Txt>
+            </View>
+            <ArrowCircle onPress={() => router.push({ pathname: '/subject/[id]', params: { id: UPLOADS_SUBJECT.id, booklet: b.id } })} />
+          </Card>
+        ))}
+        <Pressable onPress={() => router.push('/import')} style={({ pressed }) => [styles.uploadCard, { borderColor: p.border }, pressed && { opacity: 0.8 }]}>
+          <View style={[styles.plus, { backgroundColor: p.primarySoft }]}>
+            <Icon as={Plus} size={18} color={p.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Txt weight="semibold">Upload a file</Txt>
+            <Txt muted size={Type.tiny}>PDF, Word, PowerPoint, image or text. We turn it into a booklet.</Txt>
+          </View>
+        </Pressable>
+      </View>
 
       <LockedModal visible={!!locked} subjectName={locked?.name} onClose={() => setLocked(null)} />
-    </ScrollView>
+    </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 18, paddingBottom: 32 },
-  filters: { gap: 8, paddingVertical: 18 },
-  typeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, borderWidth: 1 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -5 },
-  card: { gap: 12, padding: 14 },
-  lock: { position: 'absolute', top: 12, right: 12, width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 },
+  chips: { gap: 8, paddingVertical: 18, paddingHorizontal: 20 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  subjectCard: { borderRadius: 22, padding: 6, paddingBottom: 10 },
+  subjectMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 6, paddingTop: 10 },
+  lockDot: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  uploadRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 20 },
+  uploadCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 20, borderWidth: 1.2, borderStyle: 'dashed' },
+  plus: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
 });
