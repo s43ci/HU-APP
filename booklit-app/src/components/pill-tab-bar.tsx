@@ -129,11 +129,11 @@ export function PillTabBar({ state, navigateToTab, insets }: BottomTabBarProps) 
                   <Ico size={21} color={activeFg} strokeWidth={1.9} absoluteStrokeWidth />
                 </Animated.View>
               </View>
-              <View>
-                <Animated.Text style={[styles.label, { color: inactive, opacity: off }]}>
+              <View style={{ alignSelf: 'stretch' }}>
+                <Animated.Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} allowFontScaling={false} style={[styles.label, { color: inactive, opacity: off }]}>
                   {tab.label}
                 </Animated.Text>
-                <Animated.Text style={[styles.label, styles.labelActive, { color: activeFg, opacity: on }]}>
+                <Animated.Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} allowFontScaling={false} style={[styles.label, styles.labelActive, { color: activeFg, opacity: on }]}>
                   {tab.label}
                 </Animated.Text>
               </View>
@@ -146,7 +146,7 @@ export function PillTabBar({ state, navigateToTab, insets }: BottomTabBarProps) 
 }
 
 const styles = StyleSheet.create({
-  wrap: { position: 'absolute', left: 16, right: 16 },
+  wrap: { position: 'absolute', left: 12, right: 12 },
   bar: {
     flexDirection: 'row',
     borderRadius: 28,
@@ -164,8 +164,8 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     backgroundColor: '#FFFFFF',
   },
-  item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, paddingVertical: 9 },
+  item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, paddingVertical: 9, paddingHorizontal: 2 },
   // Same font for both layers so the cross-fading labels have identical widths.
-  label: { fontFamily: Font.semibold, fontSize: 11, textAlign: 'center' },
+  label: { fontFamily: Font.semibold, fontSize: 10.5, letterSpacing: -0.1, textAlign: 'center', alignSelf: 'stretch' },
   labelActive: { position: 'absolute', left: 0, right: 0 },
 });

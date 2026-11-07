@@ -53,7 +53,7 @@ export default function SubjectScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 110 + insets.bottom }}>
         {/* Hero */}
         <View>
-          <SubjectThumb subjectId={subject.id} width="100%" height={260 + insets.top} radius={0} />
+          <SubjectThumb subjectId={subject.id} width="100%" height={310 + insets.top} radius={0} />
           <View style={[styles.heroBar, { top: insets.top + 8 }]}>
             <CircleButton icon={ArrowLeft} variant="glass" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/library'))} />
             {current ? (

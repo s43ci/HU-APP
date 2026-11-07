@@ -1,8 +1,16 @@
 /**
  * Subject artwork generated with Gemini (prompts in docs/image-prompts.md).
- * Drop each file into assets/subjects/<id>.jpg and add a require() line here.
- * Subjects without an image fall back to a thin-line icon tile.
+ * Files live in assets/subjects/<id>.jpg (768×768). Subjects without an image
+ * fall back to a thin-line icon tile.
  */
 export const subjectImages: Partial<Record<string, number>> = {
-  // 'oral-surgery': require('@/assets/subjects/oral-surgery.jpg'),
+  'oral-surgery': require('@/assets/subjects/oral-surgery.jpg'),
+  orthodontics: require('@/assets/subjects/orthodontics.jpg'),
+  'oral-medicine': require('@/assets/subjects/oral-medicine.jpg'),
+  prosthodontics: require('@/assets/subjects/prosthodontics.jpg'),
+  endodontics: require('@/assets/subjects/endodontics.jpg'),
+  periodontics: require('@/assets/subjects/periodontics.jpg'),
+  paediatric: require('@/assets/subjects/paediatric.jpg'),
+  'dental-trauma': require('@/assets/subjects/dental-trauma.jpg'),
+  uploads: require('@/assets/subjects/uploads.jpg'),
 };
