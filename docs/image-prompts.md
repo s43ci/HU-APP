@@ -9,6 +9,8 @@
 3. خلّ المقاس **مربع 1:1** (1024×1024 أو أكبر).
 4. دزلي الصورة واكتب اسم المادة. أنا أسميها وأضيفها للتطبيق مباشرة.
 
+> الصور 1–8 وصورة `uploads.jpg` مضافة للتطبيق. الصور 9–14 مال المرحلة الأولى والثانية بعدها ناقصة.
+
 > إذا طلعت صورة بيها كتابة أو لون غريب، اطلب من Gemini: «نفس الصورة بدون أي نص، والخلفية لافندر فاتح».
 
 ---
@@ -78,6 +80,49 @@ A small, cute baby tooth with a gentle rounded shape and a tiny friendly sparkle
 ### 8. Dental Trauma: `dental-trauma.jpg`
 ```
 An upper central incisor with a clean diagonal crown fracture, the broken fragment floating slightly away from the tooth, a thin violet crack-line glow along the fracture edge.
+```
+
+---
+
+## مواد المرحلة الأولى والثانية (جديدة)
+
+| # | المادة | المرحلة | اسم الملف |
+|---|--------|---------|-----------|
+| 9 | Dental Anatomy | الأولى | `dental-anatomy.jpg` |
+| 10 | Human Anatomy | الأولى | `human-anatomy.jpg` |
+| 11 | Medical Biology | الأولى | `medical-biology.jpg` |
+| 12 | Oral Histology | الثانية | `oral-histology.jpg` |
+| 13 | Dental Materials | الثانية | `dental-materials.jpg` |
+| 14 | Physiology | الثانية | `physiology.jpg` |
+
+### 9. Dental Anatomy: `dental-anatomy.jpg`
+```
+Three permanent teeth side by side (an incisor, a canine and a molar) standing upright, showing their crown shapes and roots, a thin violet outline tracing the crown contour of the molar.
+```
+
+### 10. Human Anatomy: `human-anatomy.jpg`
+```
+A side view of a stylized human head and neck model with the skull and mandible visible, the masseter and temporalis muscles shown as soft translucent violet shapes over the jaw.
+```
+
+### 11. Medical Biology: `medical-biology.jpg`
+```
+A single rounded animal cell cut open to show the nucleus and organelles, a short violet DNA double helix floating beside it.
+```
+
+### 12. Oral Histology: `oral-histology.jpg`
+```
+A microscope slide with a thin tooth section on it, and above it a circular magnified view showing enamel rods and dentinal tubules in soft violet and ivory tones.
+```
+
+### 13. Dental Materials: `dental-materials.jpg`
+```
+A small mixing bowl with a violet alginate impression material, a spatula resting on its rim, and an impression tray with a clean upper arch impression beside it.
+```
+
+### 14. Physiology: `physiology.jpg`
+```
+A stylized heart with a soft violet pulse line passing through it, and a small salivary gland shape with tiny droplets beside it.
 ```
 
 ---

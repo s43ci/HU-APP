@@ -12,7 +12,14 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
+import { AppErrorBoundary } from '@/components/error-boundary';
+import { installGlobalHandlers } from '@/lib/log';
 import { AppStoreProvider, useApp } from '@/store/app-store';
+
+installGlobalHandlers();
+
+/** Any screen that throws while rendering shows this instead of crashing (and is logged). */
+export const ErrorBoundary = AppErrorBoundary;
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -53,7 +60,7 @@ function Root({ fontsLoaded }: { fontsLoaded: boolean }) {
         <Stack.Screen name="reader/[topicId]" />
         <Stack.Screen name="quiz/[topicId]" />
         <Stack.Screen name="ai/[topicId]" />
-        <Stack.Screen name="import" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="import" />
       </Stack>
     </ThemeProvider>
   );

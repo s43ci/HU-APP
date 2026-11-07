@@ -6,6 +6,8 @@
 import type { Booklet, ContentBlock, ImportedBooklet, Mcq, Stage, Subject, Topic } from './types';
 
 export const stages: Stage[] = [
+  { id: 'stage1', name: 'First Stage' },
+  { id: 'stage2', name: 'Second Stage' },
   { id: 'stage4', name: 'Fourth Stage' },
   { id: 'stage5', name: 'Fifth Stage' },
 ];
@@ -18,6 +20,12 @@ export const subjects: Subject[] = [
   { id: 'endodontics', name: 'Endodontics', stageId: 'stage4', color: '#C2410C', icon: 'tooth', isFree: true, description: 'Pulp biology, diagnosis and root canal treatment.' },
   { id: 'periodontics', name: 'Periodontics', stageId: 'stage4', color: '#15803D', icon: 'water-outline', isFree: false, description: 'Periodontal disease, classification and therapy.' },
   { id: 'paediatric', name: 'Paediatric Dentistry', stageId: 'stage5', color: '#D97706', icon: 'emoticon-happy-outline', isFree: true, description: 'Child management, pulp therapy and space maintenance.' },
+  { id: 'dental-anatomy', name: 'Dental Anatomy', stageId: 'stage1', color: '#493BEA', icon: 'tooth', isFree: true, description: 'Morphology of the permanent and primary dentition.' },
+  { id: 'human-anatomy', name: 'Human Anatomy', stageId: 'stage1', color: '#493BEA', icon: 'bone', isFree: true, description: 'Head and neck anatomy for dental students.' },
+  { id: 'medical-biology', name: 'Medical Biology', stageId: 'stage1', color: '#493BEA', icon: 'dna', isFree: false, description: 'Cell biology, genetics and tissues.' },
+  { id: 'oral-histology', name: 'Oral Histology', stageId: 'stage2', color: '#493BEA', icon: 'microscope', isFree: true, description: 'Enamel, dentin, pulp, periodontium and oral mucosa.' },
+  { id: 'dental-materials', name: 'Dental Materials', stageId: 'stage2', color: '#493BEA', icon: 'flask', isFree: false, description: 'Properties and handling of restorative and impression materials.' },
+  { id: 'physiology', name: 'Physiology', stageId: 'stage2', color: '#493BEA', icon: 'heart', isFree: true, description: 'Body systems with a focus on the oral cavity.' },
   { id: 'dental-trauma', name: 'Dental Trauma', stageId: 'stage4', color: '#4F46E5', icon: 'flash-outline', isFree: false, description: 'Classification and management of dental injuries.' },
 ];
 
@@ -30,6 +38,12 @@ const bookletTitles: Record<string, string[]> = {
   periodontics: ['Classification 2017', 'Non-surgical Therapy', 'Periodontal Surgery'],
   paediatric: ['Behaviour Management', 'Pulp Therapy in Primary Teeth', 'Space Maintainers'],
   'dental-trauma': ['Crown Fractures', 'Luxation Injuries', 'Avulsion'],
+  'dental-anatomy': ['Tooth Numbering Systems', 'Permanent Incisors', 'Permanent Canines', 'Premolars', 'Permanent Molars', 'Primary Dentition'],
+  'human-anatomy': ['Skull & Mandible', 'Muscles of Mastication', 'Cranial Nerves V & VII', 'Blood Supply of the Face'],
+  'medical-biology': ['The Cell', 'Cell Division', 'Basic Genetics'],
+  'oral-histology': ['Enamel', 'Dentin', 'Dental Pulp', 'Periodontal Ligament', 'Oral Mucosa'],
+  'dental-materials': ['Impression Materials', 'Gypsum Products', 'Dental Amalgam', 'Composite Resins'],
+  physiology: ['Blood', 'Nerve & Muscle', 'Saliva', 'Taste & Mastication'],
 };
 
 const topicTitles: Record<string, string[]> = {
@@ -40,6 +54,9 @@ const topicTitles: Record<string, string[]> = {
   'Impacted Teeth': ['Mandibular Third Molar', 'Winter’s Lines', 'Impacted Canine'],
   'Class II Malocclusion': ['Aetiology', 'Division 1 Features', 'Functional Appliances'],
   'Pulpal Diagnosis': ['Reversible Pulpitis', 'Irreversible Pulpitis', 'Pulp Necrosis', 'Sensibility Tests'],
+  'Permanent Incisors': ['Maxillary Central Incisor', 'Maxillary Lateral Incisor', 'Mandibular Incisors'],
+  Enamel: ['Physical Characteristics', 'Enamel Rods', 'Incremental Lines', 'Amelogenesis'],
+  'Impression Materials': ['Classification', 'Alginate', 'Elastomers'],
 };
 
 export const booklets: Booklet[] = Object.entries(bookletTitles).flatMap(([subjectId, titles]) =>

@@ -1,4 +1,4 @@
-export type StageId = 'stage4' | 'stage5';
+export type StageId = 'stage1' | 'stage2' | 'stage4' | 'stage5';
 
 export type Stage = { id: StageId; name: string };
 
@@ -26,7 +26,7 @@ export type ContentBlock =
   | { type: 'list'; items: string[] }
   | { type: 'table'; headers: string[]; rows: string[][] }
   | { type: 'callout'; tone: 'key' | 'warning' | 'tip'; title: string; text: string }
-  | { type: 'image'; caption: string; icon: string };
+  | { type: 'image'; caption: string; icon: string; /** Local image file (added in the editor). */ uri?: string };
 
 export type Topic = {
   id: string;

@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Bookmark, Check, ChevronRight, Heart, ListChecks, Play, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, Bookmark, Check, ChevronRight, Heart, ListChecks, Pencil, Play, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -57,12 +57,17 @@ export default function SubjectScreen() {
           <View style={[styles.heroBar, { top: insets.top + 8 }]}>
             <CircleButton icon={ArrowLeft} variant="glass" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/library'))} />
             {current ? (
-              <CircleButton
-                icon={isUploads ? Trash2 : Heart}
-                variant="glass"
-                label={isUploads ? 'Delete booklet' : 'Save booklet'}
-                onPress={() => (isUploads ? removeUpload() : app.toggleFavoriteBooklet(current.id))}
-              />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {isUploads ? (
+                  <CircleButton icon={Pencil} variant="glass" label="Edit booklet" onPress={() => router.push({ pathname: '/editor/[bookletId]', params: { bookletId: current.id } })} />
+                ) : null}
+                <CircleButton
+                  icon={isUploads ? Trash2 : Heart}
+                  variant="glass"
+                  label={isUploads ? 'Delete booklet' : 'Save booklet'}
+                  onPress={() => (isUploads ? removeUpload() : app.toggleFavoriteBooklet(current.id))}
+                />
+              </View>
             ) : null}
           </View>
           {fav ? (

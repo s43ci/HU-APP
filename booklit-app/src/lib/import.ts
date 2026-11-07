@@ -1,5 +1,8 @@
 import type { DocumentPickerAsset } from 'expo-document-picker';
+import { File as FsFile } from 'expo-file-system';
 import { Platform } from 'react-native';
+
+import { log, logError } from './log';
 
 import type { ContentBlock, ImportedBooklet, Mcq, Topic } from '@/data/types';
 import { API_BASE } from './ai';
@@ -25,17 +28,45 @@ type ServerBooklet = {
 
 /** Upload a picked file and turn the server's result into an ImportedBooklet. */
 export async function convertFile(asset: DocumentPickerAsset, signal?: AbortSignal): Promise<{ booklet: ImportedBooklet; truncated: boolean }> {
-  const form = new FormData();
-  if (Platform.OS === 'web' && asset.file) {
-    form.append('file', asset.file, asset.name);
-  } else {
-    // React Native's FormData accepts a { uri, name, type } descriptor for files.
-    form.append('file', { uri: asset.uri, name: asset.name, type: asset.mimeType ?? 'application/octet-stream' } as unknown as Blob);
+  const meta = { name: asset.name, size: asset.size, type: asset.mimeType, platform: Platform.OS };
+  log('info', 'upload', 'Starting conversion', meta);
+  const started = Date.now();
+
+  let res: Response;
+  try {
+    if (Platform.OS === 'web' && asset.file) {
+      const form = new FormData();
+      form.append('file', asset.file, asset.name);
+      res = await fetch(`${API_BASE}/api/import`, { method: 'POST', body: form, signal });
+    } else {
+      // On iOS/Android send the file as base64 JSON. This works with every fetch
+      // implementation (Expo's fetch rejects React Native's { uri } FormData parts).
+      let data: string;
+      try {
+        data = await new FsFile(asset.uri).base64();
+      } catch (e) {
+        logError('upload', e, { ...meta, step: 'read-file' });
+        throw new Error('Could not read the file from your phone. Try choosing it again.');
+      }
+      res = await fetch(`${API_BASE}/api/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: asset.name, mimeType: asset.mimeType ?? '', data }),
+        signal,
+      });
+    }
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') throw e;
+    logError('upload', e, { ...meta, step: 'network' });
+    throw new Error(`Network problem: ${(e as Error).message}. Check your internet connection and try again.`);
   }
 
-  const res = await fetch(`${API_BASE}/api/import`, { method: 'POST', body: form, signal });
-  const data = (await res.json().catch(() => ({}))) as { booklet?: ServerBooklet; truncated?: boolean; error?: string };
-  if (!res.ok || !data.booklet) throw new Error(data.error ?? `Upload failed (${res.status}).`);
+  const data = (await res.json().catch(() => ({}))) as { booklet?: ServerBooklet; truncated?: boolean; error?: string; detail?: string };
+  if (!res.ok || !data.booklet) {
+    log('error', 'upload', data.error ?? `HTTP ${res.status}`, { ...meta, status: res.status, detail: data.detail, ms: Date.now() - started });
+    throw new Error(data.error ?? `Upload failed (${res.status}).`);
+  }
+  log('info', 'upload', 'Converted', { ...meta, topics: data.booklet.topics.length, truncated: !!data.truncated, ms: Date.now() - started });
 
   const id = `upload-${Date.now().toString(36)}`;
   const topics: Topic[] = [];

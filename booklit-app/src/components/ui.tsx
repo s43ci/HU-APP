@@ -234,8 +234,9 @@ export function ArrowCircle({ onPress, variant = 'surface', size = 36 }: { onPre
 /** Top bar for inner screens: round back button, centred title, optional right slot. */
 export function TopBar({ title, right, onBack }: { title?: string; right?: ReactNode; onBack?: () => void }) {
   const insets = useSafeAreaInsets();
+  const p = usePalette();
   return (
-    <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
+    <View style={[styles.topBar, { paddingTop: insets.top + 8, backgroundColor: p.bg, zIndex: 5 }]}>
       <CircleButton icon={ArrowLeft} label="Back" onPress={onBack ?? (() => (router.canGoBack() ? router.back() : router.replace('/')))} />
       <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: 8 }}>
         {title ? (

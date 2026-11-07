@@ -1,6 +1,6 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
-import { CircleAlert, FileText, FileUp, Image as ImageIcon, Presentation, ScrollText, Sparkles } from 'lucide-react-native';
+import { CircleAlert, FilePlus2, FileText, FileUp, Image as ImageIcon, Presentation, ScrollText, Sparkles } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,7 +8,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Heading, Icon, TopBar, Txt } from '@/components/ui';
 import { Type } from '@/constants/theme';
 import { UPLOADS_SUBJECT } from '@/data/content';
+import { newBlankBooklet } from '@/lib/editor';
 import { ACCEPTED_TYPES, convertFile, MAX_UPLOAD_MB } from '@/lib/import';
+import { log } from '@/lib/log';
 import { useApp } from '@/store/app-store';
 
 const STEPS = ['Uploading your file', 'Reading the document', 'Organizing it into topics', 'Writing practice questions', 'Almost done'];
@@ -53,6 +55,7 @@ export default function ImportScreen() {
       router.replace({ pathname: '/subject/[id]', params: { id: UPLOADS_SUBJECT.id, booklet: booklet.id } });
     } catch (e) {
       const msg = (e as Error).name === 'AbortError' ? 'The conversion took too long. Try a shorter file.' : (e as Error).message;
+      if ((e as Error).name === 'AbortError') log('error', 'upload', 'Timed out or cancelled', { name: asset.name, size: asset.size });
       setState({ phase: 'error', name: asset.name, error: msg || 'Something went wrong. Please try again.', step: 0 });
     } finally {
       clearTimeout(timer);
@@ -108,6 +111,9 @@ export default function ImportScreen() {
             <View style={{ flex: 1 }}>
               <Txt weight="semibold" size={Type.small} color="#E5484D">Couldn&apos;t convert {state.name}</Txt>
               <Txt size={Type.small} color="#B4363A" style={{ marginTop: 2, lineHeight: 19 }}>{state.error}</Txt>
+              <Pressable onPress={() => router.push('/error-log')} hitSlop={8} style={{ marginTop: 8 }}>
+                <Txt weight="semibold" size={Type.small} color="#E5484D">View & share error log →</Txt>
+              </Pressable>
             </View>
           </View>
         ) : null}
@@ -120,6 +126,20 @@ export default function ImportScreen() {
         </View>
 
         {state.phase === 'error' ? <Button label="Choose another file" icon={FileUp} style={{ marginTop: 16 }} onPress={pick} /> : null}
+
+        {state.phase !== 'working' ? (
+          <Button
+            label="Or create a booklet from scratch"
+            icon={FilePlus2}
+            variant="outline"
+            style={{ marginTop: 12 }}
+            onPress={() => {
+              const b = newBlankBooklet();
+              app.addImported(b);
+              router.replace({ pathname: '/editor/[bookletId]', params: { bookletId: b.id } });
+            }}
+          />
+        ) : null}
       </ScrollView>
     </View>
   );

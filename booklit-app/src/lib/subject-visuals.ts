@@ -2,6 +2,9 @@ import {
   Baby,
   Bone,
   BookOpen,
+  Dna,
+  FlaskConical,
+  HeartPulse,
   Braces,
   Crown,
   Droplet,
@@ -26,6 +29,12 @@ const ICONS: Record<string, LucideIcon> = {
   'dental-trauma': Zap,
   uploads: FileText,
   'oral-pathology': Bone,
+  'dental-anatomy': Crown,
+  'human-anatomy': Bone,
+  'medical-biology': Dna,
+  'oral-histology': Microscope,
+  'dental-materials': FlaskConical,
+  physiology: HeartPulse,
 };
 
 export function subjectVisual(subjectId: string): { icon: LucideIcon; image?: number } {

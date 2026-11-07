@@ -16,6 +16,7 @@ import {
   Lightbulb,
   List,
   ListChecks,
+  Pencil,
   Rocket,
   Search,
   SlidersHorizontal,
@@ -46,7 +47,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Txt, withAlpha } from '@/components/ui';
 import { Font, ReaderThemes, Type, type ReaderTheme } from '@/constants/theme';
-import { getBooklet, getSubject, getTopic, mcqsOf, topicsOf } from '@/data/content';
+import { getBooklet, getSubject, getTopic, mcqsOf, topicsOf, UPLOADS_SUBJECT } from '@/data/content';
+import { Image } from 'expo-image';
 import type { ContentBlock } from '@/data/types';
 import { useApp } from '@/store/app-store';
 
@@ -181,6 +183,11 @@ export default function Reader() {
           <Text numberOfLines={1} style={[styles.topSub, { color: rt.muted }]}>{booklet.title}</Text>
           <Text numberOfLines={1} style={[styles.topTitle, { color: rt.text }]}>{topic.title}</Text>
         </View>
+        {subject.id === UPLOADS_SUBJECT.id ? (
+          <Pressable hitSlop={10} onPress={() => router.push({ pathname: '/editor/topic/[topicId]', params: { topicId: topic.id } })} style={styles.iconBtn} accessibilityLabel="Edit topic">
+            <Pencil size={19} color={rt.text} strokeWidth={1.6} />
+          </Pressable>
+        ) : null}
         <Pressable hitSlop={10} onPress={() => app.toggleBookmark(topic.id)} style={styles.iconBtn} accessibilityLabel="Bookmark">
           <Bookmark size={20} color={bookmarked ? p.primary : rt.text} fill={bookmarked ? p.primary : 'transparent'} strokeWidth={1.6} />
         </Pressable>
@@ -329,6 +336,9 @@ export default function Reader() {
               <Tool icon={Search} label="Search" onPress={() => { setSheet(null); setSearchOpen(true); showChrome(true); }} />
               <Tool icon={Bookmark} label={bookmarked ? 'Saved' : 'Bookmark'} active={bookmarked} onPress={() => app.toggleBookmark(topic.id)} />
               <Tool icon={Highlighter} label="Highlight" active={highlightMode} onPress={() => { setHighlightMode((v) => !v); setSheet(null); }} />
+              {subject.id === UPLOADS_SUBJECT.id ? (
+                <Tool icon={Pencil} label="Edit" onPress={() => { setSheet(null); router.push({ pathname: '/editor/topic/[topicId]', params: { topicId: topic.id } }); }} />
+              ) : null}
             </View>
 
             <Txt weight="semibold" size={Type.small} muted style={styles.label}>CONTENTS</Txt>
@@ -430,9 +440,13 @@ function Block({ block: b, fs, theme, accent }: { block: ContentBlock; fs: numbe
     case 'image':
       return (
         <View style={{ marginVertical: 10, marginBottom: 18 }}>
-          <View style={[styles.figure, { backgroundColor: withAlpha(accent, theme === 'dark' ? 0.12 : 0.05), borderColor: rt.border }]}>
-            <ImageIcon size={34} color={withAlpha(accent, 0.55)} strokeWidth={1.3} />
-          </View>
+          {b.uri ? (
+            <Image source={{ uri: b.uri }} style={[styles.photo, { borderColor: rt.border }]} contentFit="contain" transition={150} />
+          ) : (
+            <View style={[styles.figure, { backgroundColor: withAlpha(accent, theme === 'dark' ? 0.12 : 0.05), borderColor: rt.border }]}>
+              <ImageIcon size={34} color={withAlpha(accent, 0.55)} strokeWidth={1.3} />
+            </View>
+          )}
           <Text style={[{ fontFamily: Font.regular, color: rt.muted, fontSize: 12.5 * fs, textAlign: 'center', marginTop: 8 }]}>{b.caption}</Text>
         </View>
       );
@@ -490,6 +504,7 @@ const styles = StyleSheet.create({
   td: { width: 190, padding: 10 },
   tdFirst: { width: 104 },
   callout: { borderRadius: 14, padding: 14, marginVertical: 8, marginBottom: 16 },
+  photo: { width: '100%', aspectRatio: 4 / 3, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
   figure: { height: 150, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   practice: { marginTop: 28, paddingTop: 24, borderTopWidth: StyleSheet.hairlineWidth },
   practiceTitle: { fontFamily: Font.semibold, fontSize: 16, marginBottom: 12 },

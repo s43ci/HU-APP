@@ -41,7 +41,7 @@ export default function Welcome() {
           <Field label="Full name" value={name} onChangeText={setName} placeholder="e.g. Ahmed Ali" autoCapitalize="words" />
           <Field label="Email (optional)" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
           <Txt weight="medium" size={Type.tiny} muted style={{ marginLeft: 4, marginTop: 4 }}>Stage</Txt>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {stages.map((s) => (
               <Chip key={s.id} label={s.name} active={stageId === s.id} onPress={() => setStageId(s.id)} />
             ))}

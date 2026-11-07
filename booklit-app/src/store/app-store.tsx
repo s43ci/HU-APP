@@ -76,6 +76,7 @@ type Store = Persisted & {
   logOut: () => void;
   addImported: (b: ImportedBooklet) => void;
   removeImported: (id: string) => void;
+  updateImported: (b: ImportedBooklet) => void;
   streak: number;
   contentVersion: number;
 };
@@ -171,6 +172,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           studyDays: s.studyDays.includes(today()) ? s.studyDays : [...s.studyDays, today()].slice(-400),
         })),
       addImported: (b) => update((s) => ({ importedBooklets: [b, ...s.importedBooklets.filter((x) => x.id !== b.id)] })),
+      updateImported: (b) => update((s) => ({ importedBooklets: s.importedBooklets.map((x) => (x.id === b.id ? b : x)) })),
       removeImported: (id) =>
         update((s) => ({
           importedBooklets: s.importedBooklets.filter((x) => x.id !== id),

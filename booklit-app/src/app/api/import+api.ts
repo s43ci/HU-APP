@@ -104,30 +104,44 @@ export async function POST(request: Request) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return json({ error: 'The conversion service is not configured.' }, 500);
 
-  let file: File | null = null;
+  // Two ways in: multipart form data ("file" field, used by the web app) or JSON
+  // { name, mimeType, data: base64 } (used by the iOS/Android app).
+  let name = 'document';
+  let mime = '';
+  let bytes: Uint8Array;
   try {
-    const form = await request.formData();
-    const f = (form as unknown as { get(name: string): unknown }).get('file');
-    if (f && typeof f !== 'string') file = f as File;
+    if ((request.headers.get('content-type') ?? '').includes('application/json')) {
+      const body = (await request.json()) as { name?: string; mimeType?: string; data?: string };
+      if (!body.data) return json({ error: 'No file received.' }, 400);
+      name = body.name || name;
+      mime = body.mimeType || '';
+      bytes = fromBase64(body.data);
+    } else {
+      const form = await request.formData();
+      const f = (form as unknown as { get(name: string): unknown }).get('file');
+      if (!f || typeof f === 'string') return json({ error: 'No file received.' }, 400);
+      const file = f as File;
+      name = file.name || name;
+      mime = file.type || '';
+      bytes = new Uint8Array(await file.arrayBuffer());
+    }
   } catch {
-    return json({ error: 'Send the file as multipart form data in a field named "file".' }, 400);
+    return json({ error: 'The file could not be received. Please try again.' }, 400);
   }
-  if (!file) return json({ error: 'No file received.' }, 400);
-  if (file.size > MAX_BYTES) return json({ error: 'This file is larger than 18 MB. Please upload a smaller file or split it.' }, 413);
+  if (bytes.length > MAX_BYTES) return json({ error: 'This file is larger than 18 MB. Please upload a smaller file or split it.' }, 413);
+  if (!bytes.length) return json({ error: 'The file is empty.' }, 400);
 
-  const name = file.name || 'document';
   const ext = name.toLowerCase().split('.').pop() ?? '';
-  const bytes = new Uint8Array(await file.arrayBuffer());
 
   let part: Record<string, unknown>;
   try {
-    if (INLINE_TYPES[ext] || file.type === 'application/pdf' || file.type.startsWith('image/')) {
-      part = { inlineData: { mimeType: INLINE_TYPES[ext] ?? file.type, data: toBase64(bytes) } };
+    if (INLINE_TYPES[ext] || mime === 'application/pdf' || mime.startsWith('image/')) {
+      part = { inlineData: { mimeType: INLINE_TYPES[ext] ?? mime, data: toBase64(bytes) } };
     } else if (ext === 'docx') {
       part = { text: `Document "${name}":\n\n${docxText(bytes)}` };
     } else if (ext === 'pptx') {
       part = { text: `Slides "${name}":\n\n${pptxText(bytes)}` };
-    } else if (TEXT_EXT.includes(ext) || file.type.startsWith('text/')) {
+    } else if (TEXT_EXT.includes(ext) || mime.startsWith('text/')) {
       part = { text: `Document "${name}":\n\n${new TextDecoder().decode(bytes)}` };
     } else {
       return json({ error: 'Unsupported file type. Use PDF, Word (.docx), PowerPoint (.pptx), an image, or a text file.' }, 415);
@@ -223,6 +237,13 @@ function clean(b: RawBooklet, fileName: string) {
     })
     .filter((t) => t.blocks.length);
   return { title: s(b.title) || fileName.replace(/\.[^.]+$/, ''), language: s(b.language) || 'Unknown', topics };
+}
+
+function fromBase64(b64: string) {
+  const bin = atob(b64.replace(/^data:[^,]*,/, '').replace(/\s/g, ''));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 }
 
 function toBase64(bytes: Uint8Array) {

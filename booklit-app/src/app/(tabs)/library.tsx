@@ -7,11 +7,11 @@ import { LockedModal } from '@/components/locked-modal';
 import { ArrowCircle, Card, Chip, CircleButton, Heading, Icon, Page, SectionTitle, SubjectThumb, Txt } from '@/components/ui';
 import { Type } from '@/constants/theme';
 import { bookletsOf, courseSubjects, stages, topicsOf, topicsOfSubject, UPLOADS_SUBJECT } from '@/data/content';
-import type { Subject } from '@/data/types';
+import type { StageId, Subject } from '@/data/types';
 import { isSubjectUnlocked } from '@/lib/progress';
 import { useApp } from '@/store/app-store';
 
-type StageFilter = 'all' | 'stage4' | 'stage5';
+type StageFilter = 'all' | StageId;
 
 export default function Library() {
   const params = useLocalSearchParams<{ stage?: string }>();
@@ -21,7 +21,7 @@ export default function Library() {
   const cols = width >= 700 ? 3 : 2;
   const cardW = (Math.min(width, 900) - 40 - 12 * (cols - 1)) / cols;
 
-  const paramStage: StageFilter = params.stage === 'stage4' || params.stage === 'stage5' ? params.stage : 'all';
+  const paramStage: StageFilter = stages.some((s) => s.id === params.stage) ? (params.stage as StageId) : 'all';
   // The chip follows the URL param (Home shortcuts) until the student taps a chip.
   const [sel, setSel] = useState<{ param?: string; value: StageFilter }>({ param: params.stage, value: paramStage });
   const stage = sel.param === params.stage ? sel.value : paramStage;

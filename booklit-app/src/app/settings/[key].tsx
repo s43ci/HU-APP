@@ -120,7 +120,7 @@ function EditProfile() {
       <Field label="Full name" value={name} onChangeText={setName} autoCapitalize="words" />
       <Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" />
       <Txt weight="medium" size={Type.tiny} muted style={{ marginLeft: 4 }}>Stage</Txt>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {stages.map((s) => (
           <Chip key={s.id} label={s.name} active={stageId === s.id} onPress={() => setStageId(s.id)} />
         ))}

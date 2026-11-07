@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import {
   Bell,
+  Bug,
   BookOpen,
   ChevronsRight,
   Clock,
@@ -46,6 +47,7 @@ export default function Profile() {
     { icon: Moon, label: 'Appearance', sub: app.appearance === 'system' ? 'System' : app.appearance === 'dark' ? 'Dark' : 'Light', onPress: () => open('appearance') },
     { icon: Globe, label: 'Language', sub: app.language, onPress: () => open('language') },
     { icon: KeyRound, label: 'Change password', sub: 'Account security', onPress: () => open('password') },
+    { icon: Bug, label: 'Error log', sub: 'Share problems with the BOOKLIT team', onPress: () => router.push('/error-log') },
     { icon: LifeBuoy, label: 'Help & support', sub: 'Talk to the BOOKLIT team', onPress: () => open('help') },
     { icon: Info, label: 'About Booklit', sub: 'Version 1.0.0', onPress: () => open('about') },
   ];
