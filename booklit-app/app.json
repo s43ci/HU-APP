@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "Booklit",
+    "slug": "booklit",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "booklit",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.booklit.app"
+    },
+    "android": {
+      "package": "com.booklit.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#FBFDFC",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FBFDFC",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 140
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
