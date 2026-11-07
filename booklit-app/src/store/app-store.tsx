@@ -4,6 +4,7 @@ import { useColorScheme } from 'react-native';
 
 import { DarkPalette, LightPalette, type Palette, type ReaderTheme } from '@/constants/theme';
 import { setImportedContent } from '@/data/content';
+import { deleteBookletImages } from '@/lib/editor';
 import type { ImportedBooklet, StageId } from '@/data/types';
 
 export type Appearance = 'system' | 'light' | 'dark';
@@ -173,12 +174,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         })),
       addImported: (b) => update((s) => ({ importedBooklets: [b, ...s.importedBooklets.filter((x) => x.id !== b.id)] })),
       updateImported: (b) => update((s) => ({ importedBooklets: s.importedBooklets.map((x) => (x.id === b.id ? b : x)) })),
-      removeImported: (id) =>
+      removeImported: (id) => {
+        deleteBookletImages(id);
         update((s) => ({
           importedBooklets: s.importedBooklets.filter((x) => x.id !== id),
           favoriteBooklets: s.favoriteBooklets.filter((x) => x !== id),
           lastRead: s.lastRead?.topicId.startsWith(`${id}--`) ? null : s.lastRead,
-        })),
+        }));
+      },
       streak: computeStreak(state.studyDays),
       contentVersion,
       logOut: () => setState({ ...DEFAULTS, appearance: state.appearance }),

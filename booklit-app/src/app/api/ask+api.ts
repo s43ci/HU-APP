@@ -3,6 +3,8 @@
  * Uses Google's Gemini API with a cheap "flash-lite" model.
  * The key is the EAS secret env var GEMINI_API_KEY.
  */
+import { fetchWithRetry } from '@/server/gemini';
+
 const MODEL = 'gemini-3.5-flash-lite';
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
@@ -44,15 +46,20 @@ export async function POST(request: Request) {
 
   const context = `Subject: ${body.subject ?? ''}\nBooklet: ${body.booklet ?? ''}\nTopic: ${body.topic ?? ''}\n\nBooklet text:\n${(body.topicText ?? '').slice(0, 20000)}`;
 
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: `${SYSTEM}\n\n${context}` }] },
-      contents: history.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content.slice(0, 4000) }] })),
-      generationConfig: { maxOutputTokens: 1500, temperature: 0.4 },
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: `${SYSTEM}\n\n${context}` }] },
+        contents: history.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content.slice(0, 4000) }] })),
+        generationConfig: { maxOutputTokens: 1500, temperature: 0.4 },
+      }),
+    });
+  } catch (e) {
+    return json({ error: (e as Error).message }, 503);
+  }
 
   if (res.status === 429) return json({ error: 'Too many requests, try again in a minute.' }, 429);
   if (!res.ok) return json({ error: `AI service error (${res.status})` }, 502);

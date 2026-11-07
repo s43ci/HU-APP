@@ -37,6 +37,13 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 140
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Booklit uses your photos so you can add images to your booklets.",
+          "cameraPermission": "Booklit uses the camera so you can photograph figures for your booklets."
+        }
       ]
     ],
     "experiments": {

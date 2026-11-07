@@ -42,9 +42,14 @@ export function newId(prefix: string) {
   return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** Pick a photo from the gallery and keep a private copy so it survives app restarts. */
-export async function pickImage(): Promise<string | null> {
-  const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8, allowsEditing: true });
+/** Pick a photo (gallery or camera) and keep a private copy so it survives app restarts. */
+export async function pickImage(source: 'library' | 'camera' = 'library'): Promise<string | null> {
+  if (source === 'camera') {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) throw new Error('Camera permission was not granted.');
+  }
+  const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.8, allowsEditing: true };
+  const res = source === 'camera' ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
   if (res.canceled || !res.assets?.[0]) return null;
   const uri = res.assets[0].uri;
   if (Platform.OS === 'web') return uri;
@@ -133,4 +138,15 @@ export function newBlankBooklet(): ImportedBooklet {
     topics: [{ id: `${id}--t1`, bookletId: id, title: 'New topic', order: 1, minutes: 1, blocks: [{ type: 'paragraph', text: '' }] }],
     mcqs: [],
   };
+}
+
+/** Delete the image files that belong to a booklet (native only). */
+export function deleteBookletImages(bookletId: string) {
+  if (Platform.OS === 'web') return;
+  try {
+    const dir = new Directory(Paths.document, 'booklit-images', bookletId);
+    if (dir.exists) dir.delete();
+  } catch (e) {
+    logError('editor-image', e, { step: 'delete', bookletId });
+  }
 }

@@ -1,5 +1,5 @@
 import type { DocumentPickerAsset } from 'expo-document-picker';
-import { File as FsFile } from 'expo-file-system';
+import { Directory, File as FsFile, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 
 import { log, logError } from './log';
@@ -61,7 +61,13 @@ export async function convertFile(asset: DocumentPickerAsset, signal?: AbortSign
     throw new Error(`Network problem: ${(e as Error).message}. Check your internet connection and try again.`);
   }
 
-  const data = (await res.json().catch(() => ({}))) as { booklet?: ServerBooklet; truncated?: boolean; error?: string; detail?: string };
+  const data = (await res.json().catch(() => ({}))) as {
+    booklet?: ServerBooklet;
+    images?: { ref: number; mime: string; data: string }[];
+    truncated?: boolean;
+    error?: string;
+    detail?: string;
+  };
   if (!res.ok || !data.booklet) {
     log('error', 'upload', data.error ?? `HTTP ${res.status}`, { ...meta, status: res.status, detail: data.detail, ms: Date.now() - started });
     throw new Error(data.error ?? `Upload failed (${res.status}).`);
@@ -69,12 +75,25 @@ export async function convertFile(asset: DocumentPickerAsset, signal?: AbortSign
   log('info', 'upload', 'Converted', { ...meta, topics: data.booklet.topics.length, truncated: !!data.truncated, ms: Date.now() - started });
 
   const id = `upload-${Date.now().toString(36)}`;
+  const imageUris = await saveImages(id, data.images ?? []);
+  log('info', 'upload', 'Images', { extracted: data.images?.length ?? 0, saved: Object.keys(imageUris).length });
+  const withImages = (blocks: ContentBlock[]) =>
+    blocks
+      .map((b) => {
+        const ref = (b as { imageRef?: number }).imageRef;
+        if (b.type !== 'image' || ref == null) return b;
+        const { imageRef: _drop, ...rest } = b as ContentBlock & { imageRef?: number };
+        void _drop;
+        return imageUris[ref] ? { ...rest, uri: imageUris[ref] } : rest;
+      })
+      // A figure block that lost its picture and has no caption is empty: drop it.
+      .filter((b) => b.type !== 'image' || !!b.uri || !!b.caption);
   const topics: Topic[] = [];
   const mcqs: Mcq[] = [];
   data.booklet.topics.forEach((t, i) => {
     const topicId = `${id}--t${i + 1}`;
     const words = t.blocks.reduce((n, b) => n + JSON.stringify(b).split(/\s+/).length, 0);
-    topics.push({ id: topicId, bookletId: id, title: t.title, order: i + 1, minutes: Math.max(1, Math.round(words / 200)), blocks: t.blocks });
+    topics.push({ id: topicId, bookletId: id, title: t.title, order: i + 1, minutes: Math.max(1, Math.round(words / 200)), blocks: withImages(t.blocks) });
     t.mcqs.forEach((q, k) => mcqs.push({ ...q, id: `${topicId}--q${k + 1}`, topicId, source: 'generated' }));
   });
 
@@ -82,4 +101,31 @@ export async function convertFile(asset: DocumentPickerAsset, signal?: AbortSign
     booklet: { id, title: data.booklet.title, fileName: asset.name, language: data.booklet.language, createdAt: Date.now(), topics, mcqs },
     truncated: !!data.truncated,
   };
+}
+
+/** Store extracted PDF pictures as files (native) or data URIs (web). Returns ref -> uri. */
+async function saveImages(bookletId: string, images: { ref: number; mime: string; data: string }[]) {
+  const out: Record<number, string> = {};
+  if (!images.length) return out;
+  if (Platform.OS === 'web') {
+    for (const im of images) out[im.ref] = `data:${im.mime};base64,${im.data}`;
+    return out;
+  }
+  try {
+    const dir = new Directory(Paths.document, 'booklit-images', bookletId);
+    dir.create({ idempotent: true, intermediates: true });
+    for (const im of images) {
+      try {
+        const file = new FsFile(dir, `img-${im.ref}.${im.mime === 'image/png' ? 'png' : 'jpg'}`);
+        file.create({ overwrite: true });
+        await file.write(im.data, { encoding: 'base64' });
+        out[im.ref] = file.uri;
+      } catch (e) {
+        logError('upload', e, { step: 'save-image', ref: im.ref });
+      }
+    }
+  } catch (e) {
+    logError('upload', e, { step: 'image-dir' });
+  }
+  return out;
 }

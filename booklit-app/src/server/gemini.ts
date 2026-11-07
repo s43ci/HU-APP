@@ -11,6 +11,28 @@ export function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', ...CORS } });
 }
 
+/**
+ * fetch with one automatic retry for network errors, 429 and 5xx responses
+ * (transient Gemini hiccups), so a single blip does not fail the request.
+ */
+export async function fetchWithRetry(url: string, init: RequestInit, attempts = 2): Promise<Response> {
+  let lastError: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(url, init);
+      if ((res.status === 429 || res.status >= 500) && i < attempts - 1) {
+        await new Promise((r) => setTimeout(r, 1200 * (i + 1)));
+        continue;
+      }
+      return res;
+    } catch (e) {
+      lastError = e;
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, 1200 * (i + 1)));
+    }
+  }
+  throw new GeminiError(`Could not reach the AI service (${(lastError as Error)?.message ?? 'network error'}). Please try again.`, 503);
+}
+
 export class GeminiError extends Error {
   constructor(message: string, public status: number) {
     super(message);
@@ -20,7 +42,7 @@ export class GeminiError extends Error {
 export async function geminiJson<T>(opts: { system: string; parts: Record<string, unknown>[]; schema: unknown; maxTokens?: number; temperature?: number }): Promise<T> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new GeminiError('The AI service is not configured.', 500);
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+  const res = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({

@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import {
   ArrowDown,
+  Camera,
   ArrowUp,
   Copy,
   ImagePlus,
@@ -34,7 +35,7 @@ type Props = {
   onDelete: () => void;
   onMore: () => void;
   onAi: () => void;
-  onPickImage: () => void;
+  onPickImage: (source: 'library' | 'camera') => void;
 };
 
 export function BlockEditor({ block: b, index, count, busy, onChange, onMove, onDuplicate, onDelete, onMore, onAi, onPickImage }: Props) {
@@ -153,15 +154,22 @@ export function BlockEditor({ block: b, index, count, busy, onChange, onMove, on
             <View>
               <Image source={{ uri: b.uri }} style={styles.image} contentFit="contain" />
               <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
-                <SmallButton icon={ImagePlus} label="Replace" onPress={onPickImage} />
+                <SmallButton icon={ImagePlus} label="Replace" onPress={() => onPickImage('library')} />
+                <SmallButton icon={Camera} label="Camera" onPress={() => onPickImage('camera')} />
                 <SmallButton icon={X} label="Remove image" onPress={() => onChange({ ...b, uri: undefined })} />
               </View>
             </View>
           ) : (
-            <Pressable onPress={onPickImage} style={[styles.imagePick, { borderColor: p.primary + '55', backgroundColor: p.primarySoft }]}>
-              <Icon as={ImagePlus} size={22} color={p.primary} />
-              <Txt weight="medium" size={Type.small} color={p.primary}>Add image from gallery</Txt>
-            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable onPress={() => onPickImage('library')} style={[styles.imagePick, { borderColor: p.primary + '55', backgroundColor: p.primarySoft }]}>
+                <Icon as={ImagePlus} size={22} color={p.primary} />
+                <Txt weight="medium" size={Type.small} color={p.primary}>From gallery</Txt>
+              </Pressable>
+              <Pressable onPress={() => onPickImage('camera')} style={[styles.imagePick, { borderColor: p.primary + '55', backgroundColor: p.primarySoft }]}>
+                <Icon as={Camera} size={22} color={p.primary} />
+                <Txt weight="medium" size={Type.small} color={p.primary}>Take a photo</Txt>
+              </Pressable>
+            </View>
           )}
           <TextInput value={b.caption} onChangeText={(caption) => onChange({ ...b, caption })} placeholder="Caption" placeholderTextColor={p.textFaint} style={input([{ fontSize: 13 }, dir(b.caption)])} />
         </View>
@@ -200,6 +208,6 @@ const styles = StyleSheet.create({
   cell: { width: 150, minHeight: 42, fontSize: 13, borderRadius: 10, paddingVertical: 8 },
   tone: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999 },
   image: { width: '100%', height: 200, borderRadius: 14, backgroundColor: '#0000000A' },
-  imagePick: { height: 120, borderRadius: 16, borderWidth: 1.2, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  imagePick: { flex: 1, height: 110, borderRadius: 16, borderWidth: 1.2, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 6 },
   small: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999 },
 });

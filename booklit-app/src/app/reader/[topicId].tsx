@@ -45,6 +45,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ReaderTable } from '@/components/reader-table';
 import { Txt, withAlpha } from '@/components/ui';
 import { Font, ReaderThemes, Type, type ReaderTheme } from '@/constants/theme';
 import { getBooklet, getSubject, getTopic, mcqsOf, topicsOf, UPLOADS_SUBJECT } from '@/data/content';
@@ -75,6 +76,7 @@ export default function Reader() {
   const [matchIdx, setMatchIdx] = useState(0);
   const [highlightMode, setHighlightMode] = useState(false);
   const [pct, setPct] = useState(0);
+  const [viewer, setViewer] = useState<string | null>(null);
 
   const restoreOffset = app.lastRead?.topicId === topicId ? app.lastRead.offset : 0;
 
@@ -239,18 +241,29 @@ export default function Reader() {
         {topic.blocks.map((b, i) => {
           const isMatch = matches.includes(i);
           const isCurrent = matches[matchIdx] === i;
+          const style = [
+            highlights.includes(i) && { backgroundColor: withAlpha(HL, theme === 'dark' ? 0.22 : 0.38), borderRadius: 6, marginHorizontal: -8, paddingHorizontal: 8 },
+            isMatch && { borderLeftWidth: 2, borderLeftColor: isCurrent ? p.primary : withAlpha(p.primary, 0.35), marginLeft: -12, paddingLeft: 10 },
+          ];
+          const onLayout = (e: LayoutChangeEvent) => (track.current.blockY[i] = e.nativeEvent.layout.y);
+          const content = <Block block={b} fs={fs} theme={theme} accent={p.primary} title={topic.title} onOpenImage={setViewer} />;
+          // Tables and figures scroll/tap on their own, so they are not wrapped in the highlight press handler.
+          if (b.type === 'table' || b.type === 'image') {
+            return (
+              <View key={i} onLayout={onLayout} style={style}>
+                {content}
+              </View>
+            );
+          }
           return (
             <Pressable
               key={i}
-              onLayout={(e: LayoutChangeEvent) => (track.current.blockY[i] = e.nativeEvent.layout.y)}
+              onLayout={onLayout}
               onPress={highlightMode ? () => app.toggleHighlight(topic.id, i) : undefined}
               onLongPress={() => app.toggleHighlight(topic.id, i)}
               delayLongPress={350}
-              style={[
-                highlights.includes(i) && { backgroundColor: withAlpha(HL, theme === 'dark' ? 0.22 : 0.38), borderRadius: 6, marginHorizontal: -8, paddingHorizontal: 8 },
-                isMatch && { borderLeftWidth: 2, borderLeftColor: isCurrent ? p.primary : withAlpha(p.primary, 0.35), marginLeft: -12, paddingLeft: 10 },
-              ]}>
-              <Block block={b} fs={fs} theme={theme} accent={p.primary} />
+              style={style}>
+              {content}
             </Pressable>
           );
         })}
@@ -304,6 +317,18 @@ export default function Reader() {
           Topic {topic.order} of {siblings.length} · {Math.round(pct * 100)}%
         </Text>
       </Animated.View>
+
+      {/* Full-screen image (pinch to zoom on iOS, scroll to pan) */}
+      <Modal visible={!!viewer} transparent animationType="fade" onRequestClose={() => setViewer(null)}>
+        <View style={styles.viewer}>
+          <ScrollView maximumZoomScale={4} minimumZoomScale={1} centerContent contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}>
+            {viewer ? <Image source={{ uri: viewer }} style={{ width: '100%', aspectRatio: 1 }} contentFit="contain" /> : null}
+          </ScrollView>
+          <Pressable onPress={() => setViewer(null)} style={[styles.viewerClose, { top: insets.top + 10 }]} accessibilityLabel="Close image">
+            <X size={20} color="#fff" strokeWidth={1.8} />
+          </Pressable>
+        </View>
+      </Modal>
 
       {/* Edit sheet */}
       <Modal visible={sheet === 'edit'} transparent animationType="slide" onRequestClose={() => setSheet(null)}>
@@ -380,7 +405,7 @@ function blockText(b: ContentBlock) {
 /** Right-to-left scripts (Arabic, Persian, Kurdish, Hebrew) are laid out RTL automatically. */
 const isRtl = (s: string) => /[֐-ࣿ]/.test(s.slice(0, 80));
 
-function Block({ block: b, fs, theme, accent }: { block: ContentBlock; fs: number; theme: ReaderTheme; accent: string }) {
+function Block({ block: b, fs, theme, accent, title, onOpenImage }: { block: ContentBlock; fs: number; theme: ReaderTheme; accent: string; title?: string; onOpenImage?: (uri: string) => void }) {
   const rt = ReaderThemes[theme];
   const body = { fontFamily: Font.regular, color: rt.text, fontSize: 16 * fs, lineHeight: 27 * fs };
   const dir = (s: string) => (isRtl(s) ? ({ writingDirection: 'rtl', textAlign: 'right' } as const) : null);
@@ -401,24 +426,7 @@ function Block({ block: b, fs, theme, accent }: { block: ContentBlock; fs: numbe
         </View>
       );
     case 'table':
-      return (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 8, marginBottom: 18 }}>
-          <View style={[styles.table, { borderColor: rt.border }]}>
-            <View style={[styles.tr, { backgroundColor: withAlpha(accent, theme === 'dark' ? 0.18 : 0.07) }]}>
-              {b.headers.map((h, i) => (
-                <Text key={i} style={[styles.td, i === 0 && styles.tdFirst, { fontFamily: Font.semibold, color: rt.text, fontSize: 13 * fs }]}>{h}</Text>
-              ))}
-            </View>
-            {b.rows.map((r, ri) => (
-              <View key={ri} style={[styles.tr, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: rt.border }]}>
-                {r.map((c, ci) => (
-                  <Text key={ci} selectable style={[styles.td, ci === 0 && styles.tdFirst, { fontFamily: ci === 0 ? Font.medium : Font.regular, color: rt.text, fontSize: 13 * fs, lineHeight: 19 * fs }]}>{c}</Text>
-                ))}
-              </View>
-            ))}
-          </View>
-        </ScrollView>
-      );
+      return <ReaderTable headers={b.headers} rows={b.rows} theme={theme} accent={accent} fs={fs} title={title} />;
     case 'callout': {
       const meta: Record<string, { icon: LucideIcon; color: string }> = {
         key: { icon: Info, color: accent },
@@ -441,7 +449,9 @@ function Block({ block: b, fs, theme, accent }: { block: ContentBlock; fs: numbe
       return (
         <View style={{ marginVertical: 10, marginBottom: 18 }}>
           {b.uri ? (
-            <Image source={{ uri: b.uri }} style={[styles.photo, { borderColor: rt.border }]} contentFit="contain" transition={150} />
+            <Pressable onPress={() => onOpenImage?.(b.uri!)} accessibilityLabel="Open image">
+              <Image source={{ uri: b.uri }} style={[styles.photo, { borderColor: rt.border }]} contentFit="contain" transition={150} />
+            </Pressable>
           ) : (
             <View style={[styles.figure, { backgroundColor: withAlpha(accent, theme === 'dark' ? 0.12 : 0.05), borderColor: rt.border }]}>
               <ImageIcon size={34} color={withAlpha(accent, 0.55)} strokeWidth={1.3} />
@@ -499,11 +509,9 @@ const styles = StyleSheet.create({
   meta: { fontFamily: Font.regular, fontSize: 12, marginTop: 6, marginBottom: 20 },
   hint: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 12, marginBottom: 14 },
   hintText: { fontFamily: Font.regular, fontSize: 12.5, flex: 1 },
-  table: { borderWidth: 1, borderRadius: 12, overflow: 'hidden', minWidth: 320 },
-  tr: { flexDirection: 'row' },
-  td: { width: 190, padding: 10 },
-  tdFirst: { width: 104 },
   callout: { borderRadius: 14, padding: 14, marginVertical: 8, marginBottom: 16 },
+  viewer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.94)' },
+  viewerClose: { position: 'absolute', right: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
   photo: { width: '100%', aspectRatio: 4 / 3, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
   figure: { height: 150, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   practice: { marginTop: 28, paddingTop: 24, borderTopWidth: StyleSheet.hairlineWidth },

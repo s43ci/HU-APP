@@ -176,15 +176,15 @@ export default function TopicEditor() {
     }
   };
 
-  const addImage = async (i: number) => {
+  const addImage = async (i: number, source: 'library' | 'camera') => {
     try {
-      const uri = await pickImage();
+      const uri = await pickImage(source);
       if (!uri) return;
       const b = blocks[i];
       if (b.type === 'image') setBlock(i, { ...b, uri });
     } catch (e) {
       logError('editor-image', e);
-      flash('Could not open your photos. Check the app permission in Settings.');
+      flash(source === 'camera' ? 'Could not open the camera. Check the permission in Settings.' : 'Could not open your photos. Check the permission in Settings.');
     }
   };
 
@@ -256,6 +256,10 @@ export default function TopicEditor() {
 
         {tab === 'content' ? (
           <View style={{ gap: 4 }}>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6 }}>
+              <Button label="Add text" icon={Plus} variant="soft" style={{ flex: 1, paddingVertical: 11 }} onPress={() => insertBlock(blocks.length, emptyBlock('paragraph'))} />
+              <Button label="Add image" icon={ImageIcon} variant="soft" style={{ flex: 1, paddingVertical: 11 }} onPress={() => insertBlock(blocks.length, emptyBlock('image'))} />
+            </View>
             <InsertButton onPress={() => setSheet({ kind: 'insert', at: 0 })} />
             {blocks.map((b, i) => (
               <View key={i} style={{ gap: 4 }}>
@@ -270,7 +274,7 @@ export default function TopicEditor() {
                   onDelete={() => setBlocks(blocks.filter((_, k) => k !== i))}
                   onMore={() => setSheet({ kind: 'more', index: i })}
                   onAi={() => setSheet({ kind: 'ai', index: i })}
-                  onPickImage={() => addImage(i)}
+                  onPickImage={(src) => addImage(i, src)}
                 />
                 <InsertButton onPress={() => setSheet({ kind: 'insert', at: i + 1 })} />
               </View>
