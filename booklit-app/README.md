@@ -12,4 +12,4 @@ npx expo lint       # lint
 - Screens live in `src/app/` (tabs in `src/app/(tabs)/`).
 - Fixed header: `src/components/app-header.tsx`. Floating tab bar: `src/components/pill-tab-bar.tsx`.
 - Sample content: `src/data/content.ts`. Local state (progress, favorites, last position): `src/store/app-store.tsx`.
-- Ask AI calls the proxy in `../ai-proxy` when `EXPO_PUBLIC_AI_URL` is set in `.env`, and otherwise answers from the booklet text (demo mode).
+- Ask AI: the server route `src/app/api/ask+api.ts` (Gemini `gemini-3.5-flash-lite`) is deployed on EAS Hosting at `https://booklit.expo.app/api/ask`. The key is the EAS env var `GEMINI_API_KEY` (production, sensitive) and is never in the app bundle.

@@ -9,7 +9,7 @@
 | التطبيق | Expo (React Native) + Expo Router + TypeScript | تطبيق واحد لـ iOS وAndroid، ويُجرَّب فوراً على Expo Go |
 | الخط | Plus Jakarta Sans | من هوية BOOKLIT |
 | الأيقونات | Material Community Icons (Line) | عائلة موحدة وخفيفة |
-| الذكاء الاصطناعي | Claude عبر خادم وسيط `ai-proxy/` (Cloudflare Worker) | مفتاح الـ API يبقى على الخادم ولا يدخل التطبيق |
+| الذكاء الاصطناعي | Gemini `gemini-3.5-flash-lite` (نموذج رخيص) عبر `src/app/api/ask+api.ts` على EAS Hosting | المفتاح متغير `GEMINI_API_KEY` على Expo، ولا يدخل التطبيق |
 | الخادم (المرحلة 2) | Supabase: Postgres + Auth + Storage + RLS | حماية المحتوى المدفوع من الخادم، ولوحة إدارة سريعة |
 
 ## ما تم (اليوم 1–2): واجهة التطبيق كاملة
@@ -42,12 +42,13 @@
 - [ ] البحث عن طالب وتفعيل اشتراكه أو إلغاؤه بعد تأكيد الدفع.
 
 ### اليوم 5: الذكاء الاصطناعي والمحتوى
-- [ ] نشر `ai-proxy` وضبط `EXPO_PUBLIC_AI_URL`.
+- [x] نشر خادم Ask AI على `https://booklit.expo.app/api/ask` (Gemini flash-lite).
 - [ ] تحديد عدد أسئلة الـ AI لكل طالب يومياً، ومنع الوصول للمواد المقفلة.
 - [ ] رفع المحتوى الحقيقي للملازم (بدل المحتوى التجريبي).
 
 ### اليوم 6–7: الاختبار والنشر
-- [ ] اختبار على iPhone و Android عبر Expo Go، ثم Development Build.
+- [x] نشر نسخة تجريبية على Expo (قناة `preview`) للتجربة بـ Expo Go.
+- [ ] اختبار على iPhone و Android، ثم Development Build.
 - [ ] `eas build` و TestFlight / Google Play Internal Testing.
 - [ ] تحديثات OTA عبر `eas update`.
 
@@ -59,10 +60,13 @@ npm install
 npx expo start        # امسح الـ QR بتطبيق Expo Go
 ```
 
-ولتشغيل الذكاء الاصطناعي:
+## النشر
 
 ```bash
-cd ai-proxy && npm install
-npx wrangler secret put ANTHROPIC_API_KEY
-npm run deploy        # ثم ضع الرابط في booklit-app/.env  ->  EXPO_PUBLIC_AI_URL=...
+cd booklit-app
+npx expo export --platform web && eas deploy --prod --environment production   # خادم Ask AI
+eas update --channel preview --environment production -m "وصف التحديث"          # تحديث التطبيق على Expo Go
 ```
+
+التجربة: افتح Expo Go وامسح [`docs/expo-go-qr.png`](expo-go-qr.png)، أو افتح الرابط
+`exp://u.expo.dev/21780752-ca27-448a-bc5e-c10eaa1da81e?channel-name=preview`

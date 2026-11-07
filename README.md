@@ -16,13 +16,13 @@ BOOKLIT ليس تطبيق ملازم فقط. هو منظومة تتكوّن من
 | المجلد | المحتوى |
 |--------|---------|
 | [`booklit-app/`](booklit-app) | تطبيق الطالب (Expo / React Native) |
-| [`ai-proxy/`](ai-proxy) | خادم Ask AI (Cloudflare Worker يستدعي Claude) |
 | [`docs/plan.md`](docs/plan.md) | خطة التنفيذ وما تم |
 | [`docs/booklit-studio.md`](docs/booklit-studio.md) | وثيقة BOOKLIT Studio |
 
 ### تجربة التطبيق
 
-```bash
-cd booklit-app && npm install && npx expo start
-```
-امسح رمز الـ QR بتطبيق **Expo Go** على الهاتف.
+افتح **Expo Go** على الهاتف وامسح هذا الرمز:
+
+<img src="docs/expo-go-qr.png" width="220" />
+
+أو شغّله محلياً: `cd booklit-app && npm install && npx expo start`

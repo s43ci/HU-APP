@@ -4,10 +4,10 @@ import type { Topic } from '@/data/types';
 export type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
 /**
- * URL of the BOOKLIT AI proxy (see /ai-proxy). The Claude API key lives only on the proxy,
- * never inside the app. Set EXPO_PUBLIC_AI_URL in booklit-app/.env.
+ * Ask AI server route (src/app/api/ask+api.ts) deployed on EAS Hosting.
+ * The Gemini key lives only on the server. Override with EXPO_PUBLIC_AI_URL in .env.
  */
-const AI_URL = process.env.EXPO_PUBLIC_AI_URL;
+const AI_URL = process.env.EXPO_PUBLIC_AI_URL || 'https://booklit.expo.app/api/ask';
 
 export const aiConfigured = !!AI_URL;
 
