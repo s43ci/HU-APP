@@ -2,6 +2,8 @@ import { router } from 'expo-router';
 import {
   Bell,
   Bug,
+  Crown,
+  Wand2,
   BookOpen,
   ChevronsRight,
   Clock,
@@ -19,7 +21,6 @@ import {
   ShieldCheck,
   Flame,
   Target,
-  Upload,
   type LucideIcon,
 } from 'lucide-react-native';
 import { Alert, Platform, Pressable, StyleSheet, View } from 'react-native';
@@ -38,11 +39,13 @@ export default function Profile() {
   const accuracy = app.quiz.answered ? Math.round((app.quiz.correct / app.quiz.answered) * 100) : 0;
   const open = (key: string) => router.push({ pathname: '/settings/[key]', params: { key } });
 
+  const ROLE_LABEL = { pro: 'Pro', premium: 'Premium', admin: 'Admin' } as const;
   const rows: { icon: LucideIcon; label: string; sub: string; onPress: () => void }[] = [
+    { icon: Crown, label: 'Account & plan', sub: `${ROLE_LABEL[app.role]} plan`, onPress: () => open('account') },
+    ...(app.canUpload ? [{ icon: Wand2, label: 'BOOKLIT Studio', sub: 'Upload, design and question banks', onPress: () => router.push('/studio') }] : []),
     { icon: Pencil, label: 'Edit profile', sub: 'Name, email and stage', onPress: () => open('edit-profile') },
     { icon: Heart, label: 'Saved', sub: 'Your booklets and topics', onPress: () => router.push('/favorites') },
     { icon: RotateCcw, label: 'Recently viewed', sub: 'Pick up where you left off', onPress: () => open('recent') },
-    { icon: Upload, label: 'My uploads', sub: `${app.importedBooklets.length} files turned into booklets`, onPress: () => router.push('/library') },
     { icon: Bell, label: 'Notifications', sub: app.notifications ? 'On' : 'Off', onPress: () => open('notifications') },
     { icon: Moon, label: 'Appearance', sub: app.appearance === 'system' ? 'System' : app.appearance === 'dark' ? 'Dark' : 'Light', onPress: () => open('appearance') },
     { icon: Globe, label: 'Language', sub: app.language, onPress: () => open('language') },

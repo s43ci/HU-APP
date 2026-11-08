@@ -1,4 +1,4 @@
-import { BellOff, Bot, BookPlus, FileUp, Flame } from 'lucide-react-native';
+import { BellOff, Bot, BookPlus, Flame, Highlighter } from 'lucide-react-native';
 import { ScrollView, View } from 'react-native';
 
 import { Card, EmptyState, Icon, TopBar, Txt } from '@/components/ui';
@@ -6,7 +6,7 @@ import { Type } from '@/constants/theme';
 import { useApp } from '@/store/app-store';
 
 const ITEMS = [
-  { icon: FileUp, title: 'Upload your own notes', text: 'Turn any PDF, Word or PowerPoint file into a booklet with practice questions.', when: 'New' },
+  { icon: Highlighter, title: 'Highlight, notes and drawing', text: 'Long-press any word to highlight a phrase or add a note. Use the pen to draw on the page.', when: 'New' },
   { icon: BookPlus, title: 'Midface Fractures is ready', text: 'Oral Surgery now has 8 topics with ministry and instructor MCQs.', when: 'Today' },
   { icon: Bot, title: 'Ask AI is here', text: 'Open any topic and ask about the subject in front of you.', when: 'Yesterday' },
   { icon: Flame, title: 'Keep your streak', text: 'One topic a day keeps you on track for finals.', when: 'This week' },

@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { FileUp, Lock, Plus, Search } from 'lucide-react-native';
+import { Lock, Plus, Search, Wand2 } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 
@@ -38,7 +38,7 @@ export default function Library() {
     <Page>
       <View style={styles.top}>
         <Txt weight="medium" muted size={Type.small}>Library</Txt>
-        <CircleButton icon={FileUp} label="Upload a file" onPress={() => router.push('/import')} />
+        {app.canUpload ? <CircleButton icon={Wand2} label="BOOKLIT Studio" onPress={() => router.push('/studio')} /> : <View />}
       </View>
 
       <View style={styles.headRow}>
@@ -80,8 +80,10 @@ export default function Library() {
         })}
       </View>
 
+      {app.canUpload || uploads.length ? (
+        <>
       <View style={{ marginTop: 26 }}>
-        <SectionTitle title="My uploads" action={uploads.length ? `${uploads.length} files` : undefined} />
+        <SectionTitle title="Studio drafts" action={uploads.length ? `${uploads.length} files` : undefined} />
       </View>
       <View style={{ gap: 10 }}>
         {uploads.map((b) => (
@@ -94,16 +96,21 @@ export default function Library() {
             <ArrowCircle onPress={() => router.push({ pathname: '/subject/[id]', params: { id: UPLOADS_SUBJECT.id, booklet: b.id } })} />
           </Card>
         ))}
+        {app.canUpload ? (
         <Pressable onPress={() => router.push('/import')} style={({ pressed }) => [styles.uploadCard, { borderColor: p.border }, pressed && { opacity: 0.8 }]}>
           <View style={[styles.plus, { backgroundColor: p.primarySoft }]}>
             <Icon as={Plus} size={18} color={p.primary} />
           </View>
           <View style={{ flex: 1 }}>
             <Txt weight="semibold">Upload a file</Txt>
-            <Txt muted size={Type.tiny}>PDF, Word, PowerPoint, image or text. We turn it into a booklet.</Txt>
+            <Txt muted size={Type.tiny}>PDF, Word, PowerPoint, image or text. AI turns it into a booklet.</Txt>
           </View>
         </Pressable>
+        ) : null}
       </View>
+
+        </>
+      ) : null}
 
       <LockedModal visible={!!locked} subjectName={locked?.name} onClose={() => setLocked(null)} />
     </Page>

@@ -207,21 +207,33 @@ subjects.push(UPLOADS_SUBJECT);
 export const courseSubjects = () => subjects.filter((s) => s.id !== UPLOADS_SUBJECT.id);
 
 let importedIds = new Set<string>();
-/** Merge the student's imported booklets into the shared content arrays (called by the store). */
-export function setImportedContent(list: ImportedBooklet[]) {
-  const isOld = (bookletId: string) => importedIds.has(bookletId);
-  for (const arr of [booklets] as Booklet[][]) for (let i = arr.length - 1; i >= 0; i--) if (isOld(arr[i].id)) arr.splice(i, 1);
-  for (let i = topics.length - 1; i >= 0; i--) if (isOld(topics[i].bookletId)) topics.splice(i, 1);
-  const oldTopicPrefix = [...importedIds];
-  for (let i = mcqs.length - 1; i >= 0; i--) if (oldTopicPrefix.some((b) => mcqs[i].topicId.startsWith(`${b}--`))) mcqs.splice(i, 1);
+let extraIds = new Set<string>();
+/**
+ * Merge Studio content into the shared arrays (called by the store):
+ * uploaded/created booklets (placed in their chosen subject) and MCQs imported from question banks.
+ */
+export function setImportedContent(list: ImportedBooklet[], extra: Mcq[] = []) {
+  for (let i = booklets.length - 1; i >= 0; i--) if (importedIds.has(booklets[i].id)) booklets.splice(i, 1);
+  for (let i = topics.length - 1; i >= 0; i--) if (importedIds.has(topics[i].bookletId)) topics.splice(i, 1);
+  for (let i = mcqs.length - 1; i >= 0; i--) {
+    const q = mcqs[i];
+    if (extraIds.has(q.id) || [...importedIds].some((b) => q.topicId.startsWith(`${b}--`))) mcqs.splice(i, 1);
+  }
 
   importedIds = new Set(list.map((b) => b.id));
-  list.forEach((b, i) => {
-    booklets.push({ id: b.id, subjectId: UPLOADS_SUBJECT.id, title: b.title, order: i + 1 });
+  extraIds = new Set(extra.map((q) => q.id));
+  list.forEach((b) => {
+    const subjectId = b.subjectId && subjects.some((s) => s.id === b.subjectId) ? b.subjectId : UPLOADS_SUBJECT.id;
+    const order = booklets.filter((x) => x.subjectId === subjectId).length + 1;
+    booklets.push({ id: b.id, subjectId, title: b.title, order });
     topics.push(...b.topics);
     mcqs.push(...b.mcqs);
   });
+  mcqs.push(...extra);
 }
+
+/** True for booklets made in BOOKLIT Studio (uploaded or created), which can be edited. */
+export const isStudioBooklet = (bookletId: string) => importedIds.has(bookletId);
 
 // ---------- selectors ----------
 export const getSubject = (id: string) => subjects.find((s) => s.id === id);

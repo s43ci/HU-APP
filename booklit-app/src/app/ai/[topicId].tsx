@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { BookOpen, Bot, Languages, ListChecks, Send, Sparkles, WandSparkles } from 'lucide-react-native';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -28,7 +28,7 @@ const SUGGESTIONS: { label: string; prompt: string; icon: LucideIcon }[] = [
 ];
 
 export default function AskAI() {
-  const { topicId } = useLocalSearchParams<{ topicId: string }>();
+  const { topicId, q } = useLocalSearchParams<{ topicId: string; q?: string }>();
   const topic = getTopic(topicId);
   const booklet = topic && getBooklet(topic.bookletId);
   const subject = booklet && getSubject(booklet.subjectId);
@@ -39,11 +39,9 @@ export default function AskAI() {
   const [loading, setLoading] = useState(false);
   const scroll = useRef<ScrollViewInstance>(null);
 
-  if (!topic || !subject) return <TopBar title="Ask AI" />;
-
   const send = async (text: string) => {
     const t = text.trim();
-    if (!t || loading) return;
+    if (!t || loading || !topic) return;
     const history: ChatMessage[] = [...messages, { role: 'user', content: t }];
     setMessages(history);
     setInput('');
@@ -59,6 +57,16 @@ export default function AskAI() {
       setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 80);
     }
   };
+
+  // Opened from a highlighted passage in the reader: ask about it straight away (once).
+  const askedQ = useRef(false);
+  useEffect(() => {
+    if (!q || askedQ.current || !topic) return;
+    askedQ.current = true;
+    send(/[\u0600-\u06FF]/.test(q) ? `اشرح لي هذا الجزء: «${q}»` : `Explain this part: "${q}"`);
+  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!topic || !subject) return <TopBar title="Ask AI" />;
 
   const empty = messages.length === 0;
 

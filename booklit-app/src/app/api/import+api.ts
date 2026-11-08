@@ -4,30 +4,17 @@
  * Gemini reads the file, keeps the original language and wording, splits it into topics
  * made of content blocks, and writes practice MCQs for every topic.
  */
-import { strFromU8, unzipSync } from 'fflate';
-
 import { fetchWithRetry, GeminiError } from '@/server/gemini';
 import { extractPdfImages, type ExtractedImage } from '@/server/pdf-images';
+import { readUpload, toBase64 } from '@/server/upload';
 
 const MODEL = 'gemini-3.5-flash-lite';
-const MAX_BYTES = 18 * 1024 * 1024;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
-
-const INLINE_TYPES: Record<string, string> = {
-  pdf: 'application/pdf',
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  webp: 'image/webp',
-  heic: 'image/heic',
-  heif: 'image/heif',
-};
-const TEXT_EXT = ['txt', 'md', 'markdown', 'csv', 'html', 'htm', 'rtf'];
 
 const PROMPT = `You convert study material into a structured digital booklet for dental students.
 
@@ -47,6 +34,16 @@ Rules:
 - For PDFs, give every block "page" = the page number (1-based) where it appears; use 0 for other files.
 - "title" is the booklet title (from the document; otherwise a short descriptive title). "language" is the document's main language in English (e.g. "English", "Arabic").
 - For every topic write 3 to 5 multiple-choice questions in the same language as the document, based only on that topic. Each has exactly 4 options, answerIndex 0-3 for the correct one, and a one-sentence explanation.`;
+
+/** "AI design" mode: same facts, clearer booklet structure. */
+const ENHANCE = `
+
+AI design mode (on):
+- Keep every fact and sentence of the source, but present it like a well-designed study booklet.
+- Turn run-on text that lists things (types, signs, causes, steps) into "list" blocks, and side-by-side comparisons into "table" blocks.
+- Turn exam-relevant facts that the source states (classic signs, first-line treatments, "most common" facts, numbers worth memorising) into short "callout" blocks with tone "tip" titled "Exam tip", placed right after the paragraph they come from (keep the original sentence too).
+- End every topic with one "callout" block, tone "key", title "Key points", whose text is 3-6 short lines (separated by new lines) summarising the topic.
+- Use "heading" blocks to break long topics into clear sub-sections.`;
 
 const SCHEMA = {
   type: 'OBJECT',
@@ -112,54 +109,12 @@ export async function POST(request: Request) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return json({ error: 'The conversion service is not configured.' }, 500);
 
-  // Two ways in: multipart form data ("file" field, used by the web app) or JSON
-  // { name, mimeType, data: base64 } (used by the iOS/Android app).
-  let name = 'document';
-  let mime = '';
-  let bytes: Uint8Array;
-  try {
-    if ((request.headers.get('content-type') ?? '').includes('application/json')) {
-      const body = (await request.json()) as { name?: string; mimeType?: string; data?: string };
-      if (!body.data) return json({ error: 'No file received.' }, 400);
-      name = body.name || name;
-      mime = body.mimeType || '';
-      bytes = fromBase64(body.data);
-    } else {
-      const form = await request.formData();
-      const f = (form as unknown as { get(name: string): unknown }).get('file');
-      if (!f || typeof f === 'string') return json({ error: 'No file received.' }, 400);
-      const file = f as File;
-      name = file.name || name;
-      mime = file.type || '';
-      bytes = new Uint8Array(await file.arrayBuffer());
-    }
-  } catch {
-    return json({ error: 'The file could not be received. Please try again.' }, 400);
-  }
-  if (bytes.length > MAX_BYTES) return json({ error: 'This file is larger than 18 MB. Please upload a smaller file or split it.' }, 413);
-  if (!bytes.length) return json({ error: 'The file is empty.' }, 400);
-
-  const ext = name.toLowerCase().split('.').pop() ?? '';
-
-  let part: Record<string, unknown>;
-  try {
-    if (INLINE_TYPES[ext] || mime === 'application/pdf' || mime.startsWith('image/')) {
-      part = { inlineData: { mimeType: INLINE_TYPES[ext] ?? mime, data: toBase64(bytes) } };
-    } else if (ext === 'docx') {
-      part = { text: `Document "${name}":\n\n${docxText(bytes)}` };
-    } else if (ext === 'pptx') {
-      part = { text: `Slides "${name}":\n\n${pptxText(bytes)}` };
-    } else if (TEXT_EXT.includes(ext) || mime.startsWith('text/')) {
-      part = { text: `Document "${name}":\n\n${new TextDecoder().decode(bytes)}` };
-    } else {
-      return json({ error: 'Unsupported file type. Use PDF, Word (.docx), PowerPoint (.pptx), an image, or a text file.' }, 415);
-    }
-  } catch {
-    return json({ error: 'Could not read this file. Is it damaged or password-protected?' }, 422);
-  }
-  if ('text' in part && String(part.text).trim().length < 40) {
-    return json({ error: 'The file has almost no readable text.' }, 422);
-  }
+  const read = await readUpload(request);
+  if (!read.ok) return json({ error: read.error }, read.status);
+  const { name, mime, ext, bytes, part, options } = read.upload;
+  const enhanced = options.design !== 'original';
+  const perTopic = Math.min(8, Math.max(2, Number(options.questionsPerTopic) || 4));
+  const prompt = PROMPT.replace('3 to 5 multiple-choice questions', `${perTopic} multiple-choice questions`) + (enhanced ? ENHANCE : '');
 
   // Pull pictures out of PDFs while the AI reads the text.
   const isPdf = ext === 'pdf' || mime === 'application/pdf';
@@ -171,7 +126,7 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: PROMPT }] },
+        systemInstruction: { parts: [{ text: prompt }] },
         contents: [{ role: 'user', parts: [part, { text: 'Convert this file into the booklet JSON.' }] }],
         generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, maxOutputTokens: 65536, temperature: 0.2 },
       }),
@@ -303,79 +258,6 @@ function clean(b: RawBooklet, fileName: string) {
     })
     .filter((t) => t.blocks.length);
   return { title: s(b.title) || fileName.replace(/\.[^.]+$/, ''), language: s(b.language) || 'Unknown', topics };
-}
-
-function fromBase64(b64: string) {
-  const bin = atob(b64.replace(/^data:[^,]*,/, '').replace(/\s/g, ''));
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
-function toBase64(bytes: Uint8Array) {
-  let bin = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  return btoa(bin);
-}
-
-function decodeXml(s: string) {
-  return s
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
-    .replace(/&amp;/g, '&');
-}
-
-/** Word: paragraphs, headings and tables (as "a | b | c" rows) in reading order. */
-function docxText(bytes: Uint8Array) {
-  const files = unzipSync(bytes, { filter: (f) => f.name === 'word/document.xml' });
-  const xml = files['word/document.xml'];
-  if (!xml) throw new Error('not a docx');
-  const doc = strFromU8(xml);
-  const out: string[] = [];
-  const body = doc.replace(/<w:tbl>[\s\S]*?<\/w:tbl>/g, (tbl) => {
-    const rows = [...tbl.matchAll(/<w:tr[ >][\s\S]*?<\/w:tr>/g)].map((r) =>
-      [...r[0].matchAll(/<w:tc>[\s\S]*?<\/w:tc>/g)].map((c) => runs(c[0]).trim()).join(' | '),
-    );
-    return `<w:p><w:r><w:t>[TABLE]\n${rows.join('\n')}\n[/TABLE]</w:t></w:r></w:p>`;
-  });
-  for (const m of body.matchAll(/<w:p[ >][\s\S]*?<\/w:p>/g)) {
-    const p = m[0];
-    const text = runs(p).trim();
-    if (!text) continue;
-    const style = /<w:pStyle w:val="([^"]+)"/.exec(p)?.[1] ?? '';
-    const isList = /<w:numPr>/.test(p);
-    out.push(/heading|title/i.test(style) ? `\n## ${text}` : isList ? `- ${text}` : text);
-  }
-  return out.join('\n');
-}
-
-/** Text of all runs inside a Word XML fragment (text, tabs and line breaks). */
-function runs(xml: string) {
-  const parts: string[] = [];
-  for (const m of xml.matchAll(/<w:(t|tab|br)(?: [^>]*)?(?:\/>|>([\s\S]*?)<\/w:t>)/g)) {
-    parts.push(m[1] === 't' ? (m[2] ?? '') : m[1] === 'tab' ? '\t' : '\n');
-  }
-  return decodeXml(parts.join(''));
-}
-
-/** PowerPoint: text of every slide, in slide order. */
-function pptxText(bytes: Uint8Array) {
-  const files = unzipSync(bytes, { filter: (f) => /^ppt\/slides\/slide\d+\.xml$/.test(f.name) });
-  const names = Object.keys(files).sort((a, b) => Number(/(\d+)\.xml/.exec(a)![1]) - Number(/(\d+)\.xml/.exec(b)![1]));
-  if (!names.length) throw new Error('not a pptx');
-  return names
-    .map((n, i) => {
-      const xml = strFromU8(files[n]);
-      const paras = [...xml.matchAll(/<a:p>[\s\S]*?<\/a:p>/g)]
-        .map((p) => decodeXml([...p[0].matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)].map((t) => t[1]).join('')).trim())
-        .filter(Boolean);
-      return `--- Slide ${i + 1} ---\n${paras.join('\n')}`;
-    })
-    .join('\n\n');
 }
 
 function json(data: unknown, status = 200) {

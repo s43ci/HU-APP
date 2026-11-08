@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { Bell, BookOpen, Bot, FileUp, LibraryBig, Play, Search, Sparkles } from 'lucide-react-native';
+import { Bell, BookOpen, Bot, ChartColumn, LibraryBig, Play, Search, Sparkles, Wand2 } from 'lucide-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ArrowCircle, Card, CircleButton, Heading, Icon, Page, ProgressBar, SectionTitle, SubjectThumb, Txt } from '@/components/ui';
@@ -66,7 +66,7 @@ export default function Home() {
           <Icon as={Search} size={17} color={p.textMuted} />
           <Txt muted size={Type.small}>Search booklets</Txt>
         </Pressable>
-        <CircleButton icon={FileUp} label="Upload a file" onPress={() => router.push('/import')} />
+        {app.canUpload ? <CircleButton icon={Wand2} label="BOOKLIT Studio" onPress={() => router.push('/studio')} /> : null}
         <CircleButton icon={LibraryBig} label="Library" onPress={() => router.push('/library')} />
       </View>
 
@@ -109,7 +109,11 @@ export default function Home() {
       <View style={styles.tiles}>
         <Tile icon={LibraryBig} label="Library" onPress={() => router.push('/library')} />
         <Tile icon={Bot} label="Ask AI" active onPress={() => (lastTopic ? router.push({ pathname: '/ai/[topicId]', params: { topicId: lastTopic.id } }) : router.push('/library'))} />
-        <Tile icon={FileUp} label="Upload file" onPress={() => router.push('/import')} />
+        {app.canUpload ? (
+          <Tile icon={Wand2} label="Studio" onPress={() => router.push('/studio')} />
+        ) : (
+          <Tile icon={ChartColumn} label="Progress" onPress={() => router.push('/progress')} />
+        )}
       </View>
 
       <SectionTitle title={started.length ? 'Continue studying' : 'Suggested for you'} action="View all" onAction={() => router.push('/progress')} />

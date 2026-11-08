@@ -21,6 +21,15 @@ export default function BookletEditor() {
   const [genState, setGenState] = useState<{ done: number; total: number } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  if (!app.canEdit) {
+    return (
+      <View style={{ flex: 1, backgroundColor: p.bg }}>
+        <TopBar title="Edit booklet" />
+        <EmptyState icon={FileText} title="Editing is part of Premium" text="Upgrade to Premium to change the design of booklets." />
+      </View>
+    );
+  }
+
   if (!booklet) {
     return (
       <View style={{ flex: 1, backgroundColor: p.bg }}>
@@ -103,7 +112,7 @@ export default function BookletEditor() {
             label="Preview"
             size={40}
             variant="ink"
-            onPress={() => router.push({ pathname: '/subject/[id]', params: { id: UPLOADS_SUBJECT.id, booklet: booklet.id } })}
+            onPress={() => router.push({ pathname: '/subject/[id]', params: { id: booklet.subjectId ?? UPLOADS_SUBJECT.id, booklet: booklet.id } })}
           />
         }
       />
@@ -165,7 +174,7 @@ export default function BookletEditor() {
           })}
         </View>
         <Button label="Add topic" icon={Plus} variant="outline" style={{ marginTop: 12 }} onPress={addTopic} />
-        <Button label="Delete booklet" icon={Trash2} variant="danger" style={{ marginTop: 28 }} onPress={deleteBooklet} />
+        {app.canUpload ? <Button label="Delete booklet" icon={Trash2} variant="danger" style={{ marginTop: 28 }} onPress={deleteBooklet} /> : null}
       </ScrollView>
     </KeyboardAvoidingView>
   );

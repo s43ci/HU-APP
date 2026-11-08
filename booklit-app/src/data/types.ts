@@ -57,6 +57,8 @@ export type ImportedBooklet = {
   fileName: string;
   language: string;
   createdAt: number;
+  /** Subject the admin placed this booklet in (default: My Uploads). */
+  subjectId?: string;
   topics: Topic[];
   mcqs: Mcq[];
 };

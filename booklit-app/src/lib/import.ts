@@ -26,18 +26,25 @@ type ServerBooklet = {
   topics: { title: string; blocks: ContentBlock[]; mcqs: Omit<Mcq, 'id' | 'topicId' | 'source'>[] }[];
 };
 
-/** Upload a picked file and turn the server's result into an ImportedBooklet. */
-export async function convertFile(asset: DocumentPickerAsset, signal?: AbortSignal): Promise<{ booklet: ImportedBooklet; truncated: boolean }> {
-  const meta = { name: asset.name, size: asset.size, type: asset.mimeType, platform: Platform.OS };
-  log('info', 'upload', 'Starting conversion', meta);
-  const started = Date.now();
+export type ImportOptions = {
+  /** 'enhanced' = AI designs the booklet (lists, tables, exam tips, key points); 'original' = layout as in the file. */
+  design: 'enhanced' | 'original';
+  questionsPerTopic: number;
+  subjectId?: string;
+};
 
+/** Send a picked file (+ options) to a Studio API route and return its JSON. */
+export async function postFile<T>(path: string, asset: DocumentPickerAsset, options: Record<string, unknown>, area: string, signal?: AbortSignal): Promise<T> {
+  const meta = { path, name: asset.name, size: asset.size, type: asset.mimeType, platform: Platform.OS };
+  log('info', area, 'Uploading', meta);
+  const started = Date.now();
   let res: Response;
   try {
     if (Platform.OS === 'web' && asset.file) {
       const form = new FormData();
       form.append('file', asset.file, asset.name);
-      res = await fetch(`${API_BASE}/api/import`, { method: 'POST', body: form, signal });
+      form.append('options', JSON.stringify(options));
+      res = await fetch(`${API_BASE}${path}`, { method: 'POST', body: form, signal });
     } else {
       // On iOS/Android send the file as base64 JSON. This works with every fetch
       // implementation (Expo's fetch rejects React Native's { uri } FormData parts).
@@ -45,34 +52,45 @@ export async function convertFile(asset: DocumentPickerAsset, signal?: AbortSign
       try {
         data = await new FsFile(asset.uri).base64();
       } catch (e) {
-        logError('upload', e, { ...meta, step: 'read-file' });
+        logError(area, e, { ...meta, step: 'read-file' });
         throw new Error('Could not read the file from your phone. Try choosing it again.');
       }
-      res = await fetch(`${API_BASE}/api/import`, {
+      res = await fetch(`${API_BASE}${path}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: asset.name, mimeType: asset.mimeType ?? '', data }),
+        body: JSON.stringify({ name: asset.name, mimeType: asset.mimeType ?? '', data, options }),
         signal,
       });
     }
   } catch (e) {
     if ((e as Error).name === 'AbortError') throw e;
-    logError('upload', e, { ...meta, step: 'network' });
+    if (String((e as Error).message).startsWith('Could not read the file')) throw e;
+    logError(area, e, { ...meta, step: 'network' });
     throw new Error(`Network problem: ${(e as Error).message}. Check your internet connection and try again.`);
   }
-
-  const data = (await res.json().catch(() => ({}))) as {
-    booklet?: ServerBooklet;
-    images?: { ref: number; mime: string; data: string }[];
-    truncated?: boolean;
-    error?: string;
-    detail?: string;
-  };
-  if (!res.ok || !data.booklet) {
-    log('error', 'upload', data.error ?? `HTTP ${res.status}`, { ...meta, status: res.status, detail: data.detail, ms: Date.now() - started });
+  const data = (await res.json().catch(() => ({}))) as T & { error?: string; detail?: string };
+  if (!res.ok || data.error) {
+    log('error', area, data.error ?? `HTTP ${res.status}`, { ...meta, status: res.status, detail: data.detail, ms: Date.now() - started });
     throw new Error(data.error ?? `Upload failed (${res.status}).`);
   }
-  log('info', 'upload', 'Converted', { ...meta, topics: data.booklet.topics.length, truncated: !!data.truncated, ms: Date.now() - started });
+  log('info', area, 'Done', { ...meta, ms: Date.now() - started });
+  return data;
+}
+
+/** Upload a picked file and turn the server's result into an ImportedBooklet. */
+export async function convertFile(
+  asset: DocumentPickerAsset,
+  options: ImportOptions,
+  signal?: AbortSignal,
+): Promise<{ booklet: ImportedBooklet; truncated: boolean }> {
+  const data = await postFile<{ booklet: ServerBooklet; images?: { ref: number; mime: string; data: string }[]; truncated?: boolean }>(
+    '/api/import',
+    asset,
+    { design: options.design, questionsPerTopic: options.questionsPerTopic },
+    'upload',
+    signal,
+  );
+  log('info', 'upload', 'Converted', { topics: data.booklet.topics.length, truncated: !!data.truncated, images: data.images?.length ?? 0 });
 
   const id = `upload-${Date.now().toString(36)}`;
   const imageUris = await saveImages(id, data.images ?? []);
@@ -98,7 +116,7 @@ export async function convertFile(asset: DocumentPickerAsset, signal?: AbortSign
   });
 
   return {
-    booklet: { id, title: data.booklet.title, fileName: asset.name, language: data.booklet.language, createdAt: Date.now(), topics, mcqs },
+    booklet: { id, title: data.booklet.title, fileName: asset.name, language: data.booklet.language, createdAt: Date.now(), topics, mcqs, subjectId: options.subjectId },
     truncated: !!data.truncated,
   };
 }
@@ -128,4 +146,11 @@ async function saveImages(bookletId: string, images: { ref: number; mime: string
     logError('upload', e, { step: 'image-dir' });
   }
   return out;
+}
+
+export type BankQuestion = { question: string; options: string[]; answerIndex: number; answerFromAi: boolean; explanation: string; topicId: string };
+
+/** Upload a question bank; the server extracts every MCQ and assigns it to one of the given topics. */
+export async function importMcqBank(asset: DocumentPickerAsset, topics: { id: string; title: string }[], signal?: AbortSignal) {
+  return postFile<{ questions: BankQuestion[]; truncated?: boolean }>('/api/mcq-bank', asset, { topics }, 'mcq-bank', signal);
 }

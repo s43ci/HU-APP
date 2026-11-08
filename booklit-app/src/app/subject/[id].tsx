@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Chip, CircleButton, Icon, ProgressBar, SubjectThumb, Txt } from '@/components/ui';
 import { Type } from '@/constants/theme';
-import { bookletsOf, getSubject, stageName, topicsOf, topicsOfSubject, UPLOADS_SUBJECT } from '@/data/content';
+import { bookletsOf, getSubject, isStudioBooklet, stageName, topicsOf, topicsOfSubject, UPLOADS_SUBJECT } from '@/data/content';
 import { bookletProgress } from '@/lib/progress';
 import { useApp } from '@/store/app-store';
 
@@ -34,6 +34,7 @@ export default function SubjectScreen() {
   const fav = current ? app.favoriteBooklets.includes(current.id) : false;
   const next = topics.find((t) => !app.completedTopics.includes(t.id)) ?? topics[0];
   const isUploads = subject.id === UPLOADS_SUBJECT.id;
+  const studio = !!current && isStudioBooklet(current.id);
 
   const removeUpload = () => {
     if (!current) return;
@@ -58,15 +59,15 @@ export default function SubjectScreen() {
             <CircleButton icon={ArrowLeft} variant="glass" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/library'))} />
             {current ? (
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                {isUploads ? (
+                {studio && app.canEdit ? (
                   <CircleButton icon={Pencil} variant="glass" label="Edit booklet" onPress={() => router.push({ pathname: '/editor/[bookletId]', params: { bookletId: current.id } })} />
                 ) : null}
-                <CircleButton
-                  icon={isUploads ? Trash2 : Heart}
-                  variant="glass"
-                  label={isUploads ? 'Delete booklet' : 'Save booklet'}
-                  onPress={() => (isUploads ? removeUpload() : app.toggleFavoriteBooklet(current.id))}
-                />
+                {studio && app.canUpload ? (
+                  <CircleButton icon={Trash2} variant="glass" label="Delete booklet" onPress={removeUpload} />
+                ) : null}
+                {!isUploads ? (
+                  <CircleButton icon={Heart} variant="glass" label="Save booklet" onPress={() => app.toggleFavoriteBooklet(current.id)} />
+                ) : null}
               </View>
             ) : null}
           </View>

@@ -5,7 +5,8 @@ import { useColorScheme } from 'react-native';
 import { DarkPalette, LightPalette, type Palette, type ReaderTheme } from '@/constants/theme';
 import { setImportedContent } from '@/data/content';
 import { deleteBookletImages } from '@/lib/editor';
-import type { ImportedBooklet, StageId } from '@/data/types';
+import { DEFAULT_READER_PREFS, type Mark, type ReaderPrefs, type Role, type Stroke } from '@/data/annotations';
+import type { ImportedBooklet, Mcq, StageId } from '@/data/types';
 
 export type Appearance = 'system' | 'light' | 'dark';
 
@@ -34,6 +35,17 @@ type Persisted = {
   studySeconds: number;
   /** Subjects unlocked for this student (granted by admin after payment). */
   unlockedSubjects: string[];
+  /** Account type (see data/annotations.ts). */
+  role: Role;
+  /** Plan chosen before admin mode was unlocked, restored when leaving admin mode. */
+  planBeforeAdmin: Role;
+  /** Word-level highlights and notes per topic. */
+  marks: Record<string, Mark[]>;
+  /** Freehand drawings per topic. */
+  drawings: Record<string, Stroke[]>;
+  readerPrefs: ReaderPrefs;
+  /** MCQs imported by the admin from question banks for course (built-in) topics. */
+  extraMcqs: Mcq[];
 };
 
 const DEFAULTS: Persisted = {
@@ -56,6 +68,12 @@ const DEFAULTS: Persisted = {
   quiz: { answered: 0, correct: 0 },
   studySeconds: 0,
   unlockedSubjects: [],
+  role: 'pro',
+  planBeforeAdmin: 'pro',
+  marks: {},
+  drawings: {},
+  readerPrefs: DEFAULT_READER_PREFS,
+  extraMcqs: [],
 };
 
 const KEY = 'booklit.state.v1';
@@ -78,6 +96,14 @@ type Store = Persisted & {
   addImported: (b: ImportedBooklet) => void;
   removeImported: (id: string) => void;
   updateImported: (b: ImportedBooklet) => void;
+  addMark: (topicId: string, m: Mark) => void;
+  updateMark: (topicId: string, id: string, patch: Partial<Mark>) => void;
+  removeMark: (topicId: string, id: string) => void;
+  setDrawing: (topicId: string, strokes: Stroke[]) => void;
+  setReaderPrefs: (patch: Partial<ReaderPrefs>) => void;
+  addExtraMcqs: (list: Mcq[]) => void;
+  canEdit: boolean;
+  canUpload: boolean;
   streak: number;
   contentVersion: number;
 };
@@ -129,9 +155,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   // Keep the shared content arrays in sync with the student's uploads before children render.
   const contentVersion = useMemo(() => {
-    setImportedContent(state.importedBooklets);
-    return state.importedBooklets.length;
-  }, [state.importedBooklets]);
+    setImportedContent(state.importedBooklets, state.extraMcqs);
+    return state.importedBooklets.length * 100000 + state.extraMcqs.length;
+  }, [state.importedBooklets, state.extraMcqs]);
 
   const isDark = state.appearance === 'dark' || (state.appearance === 'system' && scheme === 'dark');
 
@@ -182,9 +208,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           lastRead: s.lastRead?.topicId.startsWith(`${id}--`) ? null : s.lastRead,
         }));
       },
+      addMark: (topicId, m) => update((s) => ({ marks: { ...s.marks, [topicId]: [...(s.marks[topicId] ?? []), m] } })),
+      updateMark: (topicId, id, patch) =>
+        update((s) => ({ marks: { ...s.marks, [topicId]: (s.marks[topicId] ?? []).map((m) => (m.id === id ? { ...m, ...patch } : m)) } })),
+      removeMark: (topicId, id) => update((s) => ({ marks: { ...s.marks, [topicId]: (s.marks[topicId] ?? []).filter((m) => m.id !== id) } })),
+      setDrawing: (topicId, strokes) => update((s) => ({ drawings: { ...s.drawings, [topicId]: strokes } })),
+      setReaderPrefs: (patch) => update((s) => ({ readerPrefs: { ...s.readerPrefs, ...patch } })),
+      addExtraMcqs: (list) => update((s) => ({ extraMcqs: [...s.extraMcqs, ...list] })),
+      canEdit: state.role === 'admin' || state.role === 'premium',
+      canUpload: state.role === 'admin',
       streak: computeStreak(state.studyDays),
       contentVersion,
-      logOut: () => setState({ ...DEFAULTS, appearance: state.appearance }),
+      logOut: () => setState({ ...DEFAULTS, appearance: state.appearance, importedBooklets: state.importedBooklets, extraMcqs: state.extraMcqs }),
     }),
     [state, ready, isDark, update, contentVersion],
   );

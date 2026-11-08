@@ -90,3 +90,9 @@ export const TAB_BAR_SPACE = 112;
 
 /** Telegram contact for subscriptions / support. Change to the real handle. */
 export const TELEGRAM_URL = 'https://t.me/booklit_support';
+
+/**
+ * Admin unlock code for BOOKLIT Studio on this device. Set EXPO_PUBLIC_ADMIN_CODE to change it.
+ * This is a local gate only; real protection needs server accounts (see docs/plan.md).
+ */
+export const ADMIN_CODE = process.env.EXPO_PUBLIC_ADMIN_CODE || '2468';

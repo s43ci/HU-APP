@@ -99,6 +99,15 @@ export default function TopicEditor() {
   // Save whatever is pending when leaving the screen.
   useEffect(() => () => flush(), []);
 
+  if (!app.canEdit) {
+    return (
+      <View style={{ flex: 1, backgroundColor: p.bg }}>
+        <TopBar title="Edit topic" />
+        <EmptyState icon={Info} title="Editing is part of Premium" text="Upgrade to Premium to change the design of booklets." />
+      </View>
+    );
+  }
+
   if (!booklet || !draft) {
     return (
       <View style={{ flex: 1, backgroundColor: p.bg }}>
