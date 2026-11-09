@@ -6,7 +6,7 @@ type Action = 'simplify' | 'fix' | 'translate' | 'bullets' | 'note' | 'expand';
 const INSTRUCTIONS: Record<Action, string> = {
   simplify: 'Rewrite the text in simpler, clearer words for a dental student. Keep every fact and all medical terms. Keep the same language.',
   fix: 'Fix spelling, grammar, punctuation, broken line wraps and spacing. Do not change the meaning or the wording beyond what is needed. Keep the same language.',
-  translate: 'Translate the text. If it is English translate it to Arabic; otherwise translate it to English. Keep medical terms in English inside Arabic text.',
+  translate: 'Translate the text. If it is English translate it to clear Modern Standard Arabic (not a dialect); otherwise translate it to English. Keep medical terms in English inside Arabic text.',
   bullets: 'Turn the text into concise bullet points (items). Keep every fact. Keep the same language.',
   note: 'Condense the text into one short key-point note a student must remember (1-2 sentences). Keep the same language.',
   expand: 'Explain the text in more detail for a dental student, adding standard textbook context. Keep it accurate and in the same language.',

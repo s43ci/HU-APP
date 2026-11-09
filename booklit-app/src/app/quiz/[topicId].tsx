@@ -72,7 +72,7 @@ export default function Quiz() {
             <Txt weight="semibold" size={44} color={pct >= 0.6 ? Brand.success : Brand.danger} style={{ marginTop: 6, letterSpacing: -1 }}>
               {Math.round(pct * 100)}%
             </Txt>
-            <Txt weight="medium" size={Type.small}>{IS_AR ? `${score} من ${questions.length} صح` : `${score} of ${questions.length} correct`}</Txt>
+            <Txt weight="medium" size={Type.small}>{IS_AR ? `${score} إجابات صحيحة من ${questions.length}` : `${score} of ${questions.length} correct`}</Txt>
           </Card>
           <Txt weight="semibold" size={Type.h2} style={{ marginTop: 24, marginBottom: 12 }}>Review answers</Txt>
           {questions.map((qq, k) => {
@@ -143,7 +143,7 @@ export default function Quiz() {
         ) : null}
         {!practice ? (
           <Txt faint size={Type.tiny} style={{ textAlign: 'center', marginTop: 10, fontFamily: Font.regular }}>
-            {IS_AR ? `أجبت ${answeredCount}/${questions.length} · النتيجة تظهر بعد التسليم` : `${answeredCount}/${questions.length} answered · results appear when you submit`}
+            {IS_AR ? `أجبت عن ${answeredCount} من ${questions.length} · تظهر النتيجة بعد التسليم` : `${answeredCount}/${questions.length} answered · results appear when you submit`}
           </Txt>
         ) : null}
       </ScrollView>

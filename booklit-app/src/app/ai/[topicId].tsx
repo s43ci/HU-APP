@@ -25,7 +25,7 @@ const SUGGESTIONS: { label: string; prompt: string; icon: LucideIcon }[] = [
   { label: 'Explain simply', prompt: 'Explain this topic simply.', icon: WandSparkles },
   { label: 'Key points', prompt: 'Summarize the key points I must remember.', icon: ListChecks },
   { label: 'Exam questions', prompt: 'Give me 3 likely exam questions with short answers.', icon: Sparkles },
-  { label: 'اشرح بالعربي', prompt: 'اشرح لي هذا الموضوع بالعربي بشكل مبسط.', icon: Languages },
+  { label: 'اشرح بالعربية', prompt: 'اشرح لي هذا الموضوع باللغة العربية الفصحى بأسلوب مبسّط.', icon: Languages },
 ];
 
 export default function AskAI() {
