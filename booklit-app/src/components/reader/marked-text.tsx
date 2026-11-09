@@ -105,7 +105,7 @@ const LAYOUT_KEYS = ['margin', 'marginTop', 'marginBottom', 'marginLeft', 'margi
  * Press on the text and drag: the words under the finger are highlighted live, and saved on release.
  * With the eraser on, dragging removes highlights instead. Dragging outside the text still scrolls.
  */
-function PaintFlow({ text, block, item, marks, dark, style, onMark, paint }: Props & { paint: Paint }) {
+function PaintFlow({ text, block, item, marks, dark, style, onMark, paint, selection, accent }: Props & { paint: Paint }) {
   const tokens = tokenize(text).filter((t) => t.w >= 0);
   const mine = marks.filter((m) => m.block === block && (m.item ?? -1) === (item ?? -1));
   const markAt = (w: number) => {
@@ -185,10 +185,12 @@ function PaintFlow({ text, block, item, marks, dark, style, onMark, paint }: Pro
     else paint.onPaint(a, b);
   };
 
+  const sel = selection && selection.block === block && (selection.item ?? -1) === (item ?? -1) ? selection : null;
   const lo = drag ? Math.min(drag.a, drag.b) : -1;
   const hi = drag ? Math.max(drag.a, drag.b) : -1;
   const bgOf = (w: number) => {
     if (drag && w >= lo && w <= hi) return paint.erase ? 'rgba(229,72,77,0.18)' : withAlpha(paint.color, alpha + 0.1);
+    if (sel && w >= Math.min(sel.a, sel.b) && w <= Math.max(sel.a, sel.b)) return withAlpha(accent, 0.28);
     const m = markAt(w);
     return m ? withAlpha(HIGHLIGHT_COLORS[m.color], alpha) : undefined;
   };

@@ -14,6 +14,7 @@ import {
   Copy,
   Eraser,
   Highlighter,
+  TextSelect,
   Image as ImageIcon,
   Info,
   Landmark,
@@ -111,6 +112,8 @@ export default function Reader() {
   const [toast, setToast] = useState<string | null>(null);
   const [lastColor, setLastColor] = useState<HighlightColor>('yellow');
   const [erasing, setErasing] = useState(false);
+  /** Select tool: drag to select text without highlighting (for Translate / Ask AI / Copy / Note). */
+  const [selecting, setSelecting] = useState(false);
   /** The highlight just made with the pen: Translate / Ask AI / Note stay one tap away without leaving the pen. */
   const [quickId, setQuickId] = useState<string | null>(null);
   const [translation, setTranslation] = useState<{ source: string; text: string; loading: boolean; error?: boolean } | null>(null);
@@ -320,9 +323,13 @@ export default function Reader() {
   const paintFor = (block: number, item: number | undefined): Paint | null =>
     mode === 'highlight' && !selMark
       ? {
-          color: HIGHLIGHT_COLORS[lastColor],
-          erase: erasing,
-          onPaint: (a, b) => paintRange(block, item, a, b),
+          color: selecting ? p.primary : HIGHLIGHT_COLORS[lastColor],
+          erase: erasing && !selecting,
+          onPaint: (a, b) => {
+            if (!selecting) return paintRange(block, item, a, b);
+            setQuickId(null);
+            setSel({ block, item, a, b });
+          },
           onErase: (a, b) => {
             eraseRange(block, item, a, b);
             setQuickId(null);
@@ -470,9 +477,9 @@ export default function Reader() {
             <Text style={[styles.meta, { color: rt.muted }]}>{tt(`${topic.minutes} min read`)}{marks.length ? ` · ${tt(`${marks.length} highlights`)}` : ''}</Text>
 
             {mode === 'highlight' && !sel && !selMark ? (
-              <View style={[styles.hint, { backgroundColor: withAlpha(erasing ? '#E5484D' : HIGHLIGHT_COLORS[lastColor], 0.22) }]}>
+              <View style={[styles.hint, { backgroundColor: withAlpha(selecting ? p.primary : erasing ? '#E5484D' : HIGHLIGHT_COLORS[lastColor], selecting ? 0.12 : 0.22) }]}>
                 <Highlighter size={16} color={rt.text} strokeWidth={1.6} />
-                <Text style={[styles.hintText, { color: rt.text }]}>{tt(erasing ? 'Drag over a highlight to erase it.' : 'Press on the text and drag to highlight. Highlights are saved automatically.')}</Text>
+                <Text style={[styles.hintText, { color: rt.text }]}>{tt(selecting ? 'Drag over the text to select it, then translate, ask AI, copy or add a note.' : erasing ? 'Drag over a highlight to erase it.' : 'Press on the text and drag to highlight. Highlights are saved automatically.')}</Text>
               </View>
             ) : null}
 
@@ -565,7 +572,7 @@ export default function Reader() {
               {selMark ? <SelBtn icon={Trash2} label="Remove" onPress={removeSelMark} /> : null}
               <SelBtn icon={X} label="Close" onPress={() => { setSel(null); setSelMarkId(null); }} />
             </View>
-            {sel ? <Text style={styles.selHint}>{tt('Tap another word to select up to it · or use the highlighter pen to drag')}</Text> : selMark?.note ? <Text numberOfLines={2} style={styles.selHint}>✎ {selMark.note}</Text> : null}
+            {sel && mode === 'read' ? <Text style={styles.selHint}>{tt('Tap another word to select up to it · or use the highlighter pen to drag')}</Text> : selMark?.note ? <Text numberOfLines={2} style={styles.selHint}>✎ {selMark.note}</Text> : null}
           </View>
         ) : null}
 
@@ -575,16 +582,17 @@ export default function Reader() {
           style={[styles.bottom, { paddingBottom: Math.max(insets.bottom, 10), backgroundColor: rt.chrome, borderTopColor: rt.border, opacity: busy ? 1 : chrome, transform: [{ translateY: busy ? 0 : slideDown }] }]}>
           {mode === 'highlight' ? (
             <View style={styles.drawRow}>
+              <Mini icon={TextSelect} label="Select" active={selecting} onPress={() => { setSelecting(!selecting); setErasing(false); setSel(null); }} color={rt.text} accent={p.primary} />
               {(Object.keys(HIGHLIGHT_COLORS) as HighlightColor[]).map((c) => {
-                const on = !erasing && lastColor === c;
+                const on = !erasing && !selecting && lastColor === c;
                 return (
-                  <Pressable key={c} onPress={() => { setLastColor(c); setErasing(false); }} style={[styles.penDot, { borderColor: on ? p.primary : 'transparent' }]} accessibilityLabel={`Highlight ${c}`}>
+                  <Pressable key={c} onPress={() => { setLastColor(c); setErasing(false); setSelecting(false); }} style={[styles.penDot, { borderColor: on ? p.primary : 'transparent' }]} accessibilityLabel={`Highlight ${c}`}>
                     <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: HIGHLIGHT_COLORS[c] }} />
                   </Pressable>
                 );
               })}
-              <Mini icon={Eraser} label="Eraser" active={erasing} onPress={() => setErasing(!erasing)} color={rt.text} accent={p.primary} />
-              <Pressable onPress={() => { setMode2('highlight'); setErasing(false); }} style={[styles.done, { backgroundColor: p.primary }]}>
+              <Mini icon={Eraser} label="Eraser" active={erasing} onPress={() => { setErasing(!erasing); setSelecting(false); }} color={rt.text} accent={p.primary} />
+              <Pressable onPress={() => { setMode2('highlight'); setErasing(false); setSelecting(false); }} style={[styles.done, { backgroundColor: p.primary }]}>
                 <Text style={styles.doneText}>{tt('Done')}</Text>
               </Pressable>
             </View>

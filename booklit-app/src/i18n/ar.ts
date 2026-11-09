@@ -648,6 +648,8 @@ export const AR: Record<string, string> = {
   'Drag over a highlight to erase it.': 'اسحب فوق التظليل لمسحه.',
   'Press on the text and drag to highlight. Highlights are saved automatically.': 'اضغط على النص واسحب إصبعك للتظليل، ويُحفظ التظليل تلقائياً.',
   'Tap another word to select up to it · or use the highlighter pen to drag': 'اضغط على كلمة أخرى لتحديد ما بينهما · أو استخدم قلم التظليل للسحب',
+  'Select': 'تحديد',
+  'Drag over the text to select it, then translate, ask AI, copy or add a note.': 'اسحب فوق النص لتحديده، ثم ترجمه أو اسأل عنه الذكاء الاصطناعي أو انسخه أو أضف ملاحظة.',
 };
 
 /** Templates for strings that contain numbers. */
