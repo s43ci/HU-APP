@@ -4,7 +4,7 @@
  * (or worked out by the AI and flagged), and it is assigned to the best-matching topic.
  */
 import { CORS, fetchWithRetry, GeminiError, GEMINI_MODEL, json } from '@/server/gemini';
-import { readUpload } from '@/server/upload';
+import { geminiPart, readUpload } from '@/server/upload';
 
 const SCHEMA = {
   type: 'OBJECT',
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   if (!key) return json({ error: 'The AI service is not configured.' }, 500);
   const read = await readUpload(request);
   if (!read.ok) return json({ error: read.error }, read.status);
-  const { part, options } = read.upload;
+  const { options } = read.upload;
 
   const topics = (Array.isArray(options.topics) ? options.topics : [])
     .map((t: { id?: string; title?: string }) => ({ id: String(t.id ?? ''), title: String(t.title ?? '') }))
@@ -55,6 +55,14 @@ Extract EVERY multiple-choice question in the file, in order. Do not skip, merge
 Topics:
 ${topics.map((t: { id: string; title: string }) => `${t.id} = ${t.title}`).join('\n')}`;
 
+  let part: Record<string, unknown>;
+  let cleanup = async () => {};
+  try {
+    ({ part, cleanup } = await geminiPart(read.upload, key));
+  } catch (e) {
+    return json({ error: (e as Error).message || 'Could not send the file to the AI service.' }, 502);
+  }
+
   let res: Response;
   try {
     res = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
@@ -67,8 +75,10 @@ ${topics.map((t: { id: string; title: string }) => `${t.id} = ${t.title}`).join(
       }),
     });
   } catch (e) {
+    await cleanup();
     return json({ error: (e as GeminiError).message }, 503);
   }
+  await cleanup();
   if (res.status === 429) return json({ error: 'The service is busy. Try again in a minute.' }, 429);
   if (!res.ok) return json({ error: `Processing failed (${res.status}).` }, 502);
 

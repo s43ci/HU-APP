@@ -1,4 +1,4 @@
-export type StageId = 'stage1' | 'stage2' | 'stage4' | 'stage5';
+export type StageId = 'stage1' | 'stage2' | 'stage3' | 'stage4' | 'stage5';
 
 export type Stage = { id: StageId; name: string };
 

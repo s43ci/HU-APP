@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { bookletsOf, getSubject, topicsOf, topicsOfSubject } from '@/data/content';
 
 export function isSubjectUnlocked(subjectId: string, unlocked: string[]) {
@@ -33,7 +34,7 @@ export function formatStudyTime(sec: number) {
 
 export function greeting(d = new Date()) {
   const h = d.getHours();
-  return h < 12 ? 'Good Morning' : h < 18 ? 'Good Afternoon' : 'Good Evening';
+  return t(h < 12 ? 'Good Morning' : h < 18 ? 'Good Afternoon' : 'Good Evening');
 }
 
 export function initials(name: string) {

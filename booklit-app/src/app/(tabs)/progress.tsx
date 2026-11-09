@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
-import { Card, Heading, Icon, Page, ProgressBar, SectionTitle, SubjectThumb, Txt } from '@/components/ui';
+import { Card, Heading, Icon, Page, ProgressBar, SectionTitle, SubjectThumb, Txt, TabHeader } from '@/components/ui';
 import { Type } from '@/constants/theme';
 import { booklets, bookletsOf, subjects, topicsOf } from '@/data/content';
 import { bookletProgress, isSubjectUnlocked, subjectProgress } from '@/lib/progress';
@@ -32,7 +32,7 @@ export default function Progress() {
 
   return (
     <Page>
-      <Txt weight="medium" muted size={Type.small}>Progress</Txt>
+      <TabHeader title="Progress" />
       <View style={{ marginTop: 14 }}>
         <Heading light="Track your" strong="study journey." />
       </View>

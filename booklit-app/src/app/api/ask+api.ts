@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     .slice(-12);
   if (!history.length || history[history.length - 1].role !== 'user') return json({ error: 'Last message must be from the user' }, 400);
 
-  const context = `Subject: ${body.subject ?? ''}\nBooklet: ${body.booklet ?? ''}\nTopic: ${body.topic ?? ''}\n\nBooklet text:\n${(body.topicText ?? '').slice(0, 20000)}`;
+  const context = `Subject: ${body.subject ?? ''}\nBooklet: ${body.booklet ?? ''}\nTopic: ${body.topic ?? ''}\n\nBooklet text:\n${(body.topicText ?? '').slice(0, 12000)}`;
 
   let res: Response;
   try {
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: `${SYSTEM}\n\n${context}` }] },
         contents: history.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content.slice(0, 4000) }] })),
-        generationConfig: { maxOutputTokens: 1500, temperature: 0.4 },
+        generationConfig: { maxOutputTokens: 900, temperature: 0.4 },
       }),
     });
   } catch (e) {

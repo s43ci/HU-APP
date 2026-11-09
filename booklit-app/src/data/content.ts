@@ -3,11 +3,13 @@
  * Hierarchy: Stage -> Subject -> Booklet -> Topic -> Content Blocks, MCQs linked by topicId.
  * Replace with API data in src/lib/api.ts (see docs/plan.md, phase 2).
  */
+import { t } from '@/i18n';
 import type { Booklet, ContentBlock, ImportedBooklet, Mcq, Stage, Subject, Topic } from './types';
 
 export const stages: Stage[] = [
   { id: 'stage1', name: 'First Stage' },
   { id: 'stage2', name: 'Second Stage' },
+  { id: 'stage3', name: 'Third Stage' },
   { id: 'stage4', name: 'Fourth Stage' },
   { id: 'stage5', name: 'Fifth Stage' },
 ];
@@ -26,6 +28,9 @@ export const subjects: Subject[] = [
   { id: 'oral-histology', name: 'Oral Histology', stageId: 'stage2', color: '#493BEA', icon: 'microscope', isFree: true, description: 'Enamel, dentin, pulp, periodontium and oral mucosa.' },
   { id: 'dental-materials', name: 'Dental Materials', stageId: 'stage2', color: '#493BEA', icon: 'flask', isFree: false, description: 'Properties and handling of restorative and impression materials.' },
   { id: 'physiology', name: 'Physiology', stageId: 'stage2', color: '#493BEA', icon: 'heart', isFree: true, description: 'Body systems with a focus on the oral cavity.' },
+  { id: 'oral-pathology', name: 'Oral Pathology', stageId: 'stage3', color: '#493BEA', icon: 'microscope', isFree: true, description: 'Cysts, tumours and lesions of the oral cavity.' },
+  { id: 'pharmacology', name: 'Pharmacology', stageId: 'stage3', color: '#493BEA', icon: 'pill', isFree: true, description: 'Drugs used in dentistry: analgesics, antibiotics and local anaesthetics.' },
+  { id: 'general-medicine', name: 'General Medicine', stageId: 'stage3', color: '#493BEA', icon: 'stethoscope', isFree: false, description: 'Systemic diseases relevant to dental practice.' },
   { id: 'dental-trauma', name: 'Dental Trauma', stageId: 'stage4', color: '#4F46E5', icon: 'flash-outline', isFree: false, description: 'Classification and management of dental injuries.' },
 ];
 
@@ -44,6 +49,9 @@ const bookletTitles: Record<string, string[]> = {
   'oral-histology': ['Enamel', 'Dentin', 'Dental Pulp', 'Periodontal Ligament', 'Oral Mucosa'],
   'dental-materials': ['Impression Materials', 'Gypsum Products', 'Dental Amalgam', 'Composite Resins'],
   physiology: ['Blood', 'Nerve & Muscle', 'Saliva', 'Taste & Mastication'],
+  'oral-pathology': ['Odontogenic Cysts', 'Odontogenic Tumours', 'Salivary Gland Diseases', 'Potentially Malignant Disorders'],
+  pharmacology: ['Local Anaesthetics', 'Analgesics', 'Antibiotics in Dentistry'],
+  'general-medicine': ['Cardiovascular Disease', 'Diabetes Mellitus', 'Bleeding Disorders'],
 };
 
 const topicTitles: Record<string, string[]> = {
@@ -249,7 +257,7 @@ export const subjectOfTopic = (topicId: string) => {
   const b = t && getBooklet(t.bookletId);
   return b && getSubject(b.subjectId);
 };
-export const stageName = (id: string) => stages.find((s) => s.id === id)?.name ?? '';
+export const stageName = (id: string) => t(stages.find((s) => s.id === id)?.name ?? '');
 
 export function topicPlainText(t: Topic): string {
   return t.blocks

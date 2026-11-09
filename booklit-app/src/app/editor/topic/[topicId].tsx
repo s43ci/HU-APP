@@ -29,6 +29,7 @@ import type { ContentBlock, ImportedBooklet, Mcq, Topic } from '@/data/types';
 import { aiEdit, blockToText, convertBlock, emptyBlock, generateMcqs, newId, pickImage, type AiAction } from '@/lib/editor';
 import { logError } from '@/lib/log';
 import { useApp } from '@/store/app-store';
+import { t as tt } from '@/i18n';
 
 type Draft = { topic: Topic; mcqs: Mcq[] };
 
@@ -187,7 +188,7 @@ export default function TopicEditor() {
 
   const addImage = async (i: number, source: 'library' | 'camera') => {
     try {
-      const uri = await pickImage(source);
+      const uri = await pickImage(source, booklet.id);
       if (!uri) return;
       const b = blocks[i];
       if (b.type === 'image') setBlock(i, { ...b, uri });
@@ -244,7 +245,7 @@ export default function TopicEditor() {
         <TextInput
           value={draft.topic.title}
           onChangeText={(title) => commit({ ...draft, topic: { ...draft.topic, title } }, 'title')}
-          placeholder="Topic title"
+          placeholder={tt('Topic title')}
           placeholderTextColor={p.textFaint}
           style={[styles.title, { color: p.text, fontFamily: Font.semibold }]}
           multiline

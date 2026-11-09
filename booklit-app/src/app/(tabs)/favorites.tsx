@@ -3,7 +3,7 @@ import { Bookmark, BookOpen, Heart } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Card, EmptyState, Heading, Icon, Page, SubjectThumb, Txt } from '@/components/ui';
+import { Card, EmptyState, Heading, Icon, Page, SubjectThumb, Txt, TabHeader } from '@/components/ui';
 import { Type } from '@/constants/theme';
 import { getBooklet, getSubject, getTopic, stageName, topicsOf, UPLOADS_SUBJECT } from '@/data/content';
 import { useApp } from '@/store/app-store';
@@ -18,7 +18,7 @@ export default function Favorites() {
 
   return (
     <Page>
-      <Txt weight="medium" muted size={Type.small}>Favorites</Txt>
+      <TabHeader title="Favorites" />
       <View style={{ marginTop: 14 }}>
         <Heading light="Your saved" strong="booklets & topics." />
       </View>

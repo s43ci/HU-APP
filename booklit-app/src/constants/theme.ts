@@ -1,3 +1,5 @@
+import { IS_AR } from '@/i18n';
+
 export const Brand = {
   violet: '#493BEA',
   blue: '#2452DB',
@@ -72,13 +74,25 @@ export const ReaderThemes = {
 } as const;
 export type ReaderTheme = keyof typeof ReaderThemes;
 
-export const Font = {
-  light: 'PlusJakartaSans_300Light',
-  regular: 'PlusJakartaSans_400Regular',
-  medium: 'PlusJakartaSans_500Medium',
-  semibold: 'PlusJakartaSans_600SemiBold',
-  bold: 'PlusJakartaSans_700Bold',
-};
+/**
+ * Fonts. English: Plus Jakarta Sans. Arabic: IBM Plex Sans Arabic for text (very readable for long
+ * passages, includes Latin for medical terms) and Alexandria for headings (modern geometric Arabic).
+ */
+export const Font = IS_AR
+  ? {
+      light: 'IBMPlexSansArabic_300Light',
+      regular: 'IBMPlexSansArabic_400Regular',
+      medium: 'IBMPlexSansArabic_500Medium',
+      semibold: 'Alexandria_600SemiBold',
+      bold: 'Alexandria_700Bold',
+    }
+  : {
+      light: 'PlusJakartaSans_300Light',
+      regular: 'PlusJakartaSans_400Regular',
+      medium: 'PlusJakartaSans_500Medium',
+      semibold: 'PlusJakartaSans_600SemiBold',
+      bold: 'PlusJakartaSans_700Bold',
+    };
 
 /** Type scale: keep it small and calm. */
 export const Type = { display: 28, title: 22, h2: 17, body: 14.5, small: 13, tiny: 11.5 };

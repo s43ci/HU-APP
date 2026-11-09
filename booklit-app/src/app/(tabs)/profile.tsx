@@ -17,7 +17,6 @@ import {
   Moon,
   Pencil,
   RotateCcw,
-  Settings,
   ShieldCheck,
   Flame,
   Target,
@@ -25,11 +24,12 @@ import {
 } from 'lucide-react-native';
 import { Alert, Platform, Pressable, StyleSheet, View } from 'react-native';
 
-import { Card, CircleButton, Icon, Page, Txt } from '@/components/ui';
+import { Card, Icon, Page, Txt, TabHeader } from '@/components/ui';
 import { Type } from '@/constants/theme';
 import { stageName, subjects } from '@/data/content';
 import { formatStudyTime, initials, startedBooklets } from '@/lib/progress';
 import { useApp } from '@/store/app-store';
+import { t as tt } from '@/i18n';
 
 export default function Profile() {
   const app = useApp();
@@ -61,19 +61,15 @@ export default function Profile() {
       router.replace('/welcome');
     };
     if (Platform.OS === 'web') return doIt();
-    Alert.alert('Log out', 'Your progress on this device will be cleared.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Log out', style: 'destructive', onPress: doIt },
+    Alert.alert(tt('Log out'), tt('Your progress on this device will be cleared.'), [
+      { text: tt('Cancel'), style: 'cancel' },
+      { text: tt('Log out'), style: 'destructive', onPress: doIt },
     ]);
   };
 
   return (
     <Page>
-      <View style={styles.top}>
-        <View style={{ width: 44 }} />
-        <Txt weight="semibold" size={Type.h2}>Profile</Txt>
-        <CircleButton icon={Settings} label="Settings" onPress={() => open('appearance')} />
-      </View>
+      <TabHeader title="Profile" />
 
       {/* Identity + key stats */}
       <View style={styles.idRow}>

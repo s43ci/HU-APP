@@ -4,6 +4,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, Vi
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Font, ReaderThemes, type ReaderTheme } from '@/constants/theme';
+import { t as tt } from '@/i18n';
 import { withAlpha } from './ui';
 
 type Props = { headers: string[]; rows: string[][]; theme: ReaderTheme; accent: string; fs: number; title?: string };
@@ -42,8 +43,10 @@ export function ReaderTable({ headers, rows, theme, accent, fs, title }: Props) 
   const widths = colWidths.map((x) => x * scale);
 
   const hasHeader = headers.some((h) => h.trim());
+  // English tables stay left-to-right even inside the Arabic interface (and vice versa).
+  const tableDir = isRtl([...headers, ...(rows[0] ?? [])].join(' ')) ? 'rtl' : 'ltr';
   const grid = (cellWidths: number[], big = false) => (
-    <View style={[styles.table, { borderColor: rt.border }]}>
+    <View style={[styles.table, { borderColor: rt.border, direction: tableDir }]}>
       {hasHeader ? <Row cells={headers} widths={cellWidths} header theme={theme} accent={accent} fs={big ? Math.max(fs, 1) : fs} /> : null}
       {rows.map((r, i) => (
         <Row key={i} cells={r} widths={cellWidths} theme={theme} accent={accent} fs={big ? Math.max(fs, 1) : fs} zebra={i % 2 === 1} />
@@ -57,14 +60,14 @@ export function ReaderTable({ headers, rows, theme, accent, fs, title }: Props) 
         {!fits ? (
           <View style={styles.hint}>
             <ChevronsLeftRight size={14} color={rt.muted} strokeWidth={1.6} />
-            <Text style={[styles.hintText, { color: rt.muted }]}>Swipe to see all {w.length} columns</Text>
+            <Text style={[styles.hintText, { color: rt.muted }]}>{tt('Swipe to see all')} {w.length} {tt('columns')}</Text>
           </View>
         ) : (
           <View />
         )}
-        <Pressable onPress={() => setFull(true)} hitSlop={8} style={[styles.expand, { backgroundColor: withAlpha(accent, 0.1) }]} accessibilityLabel="Open table full screen">
+        <Pressable onPress={() => setFull(true)} hitSlop={8} style={[styles.expand, { backgroundColor: withAlpha(accent, 0.1) }]} accessibilityLabel={tt('Open table full screen')}>
           <Maximize2 size={13} color={accent} strokeWidth={1.8} />
-          <Text style={[styles.expandText, { color: accent }]}>Full screen</Text>
+          <Text style={[styles.expandText, { color: accent }]}>{tt('Full screen')}</Text>
         </Pressable>
       </View>
 
@@ -114,8 +117,8 @@ function FullTable({ visible, onClose, title, theme, accent, headers, rows, weig
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} supportedOrientations={['portrait', 'landscape']}>
       <View style={{ flex: 1, backgroundColor: rt.bg, paddingTop: insets.top }}>
         <View style={[styles.fullBar, { borderBottomColor: rt.border }]}>
-          <Text numberOfLines={1} style={[styles.fullTitle, { color: rt.text }]}>{title ?? 'Table'}</Text>
-          <Text style={[styles.hintText, { color: rt.muted }]}>{rows.length} rows · {w.length} columns</Text>
+          <Text numberOfLines={1} style={[styles.fullTitle, { color: rt.text }]}>{title ?? tt('Table')}</Text>
+          <Text style={[styles.hintText, { color: rt.muted }]}>{rows.length} {tt('rows')} · {w.length} {tt('columns')}</Text>
           <Pressable onPress={onClose} hitSlop={10} style={styles.close} accessibilityLabel="Close">
             <X size={20} color={rt.text} strokeWidth={1.7} />
           </Pressable>

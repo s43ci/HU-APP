@@ -1,5 +1,4 @@
 import * as Clipboard from 'expo-clipboard';
-import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   ALargeSmall,
@@ -18,6 +17,7 @@ import {
   Image as ImageIcon,
   Info,
   Landmark,
+  Languages,
   Lightbulb,
   List,
   ListChecks,
@@ -59,14 +59,17 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DrawingLayer, type DrawTool } from '@/components/reader/drawing-layer';
-import { MarkedText, wordsOf, type Selection } from '@/components/reader/marked-text';
+import { MarkedText, tokenize, wordsOf, type Selection } from '@/components/reader/marked-text';
 import { ReaderTable } from '@/components/reader-table';
-import { Txt, withAlpha } from '@/components/ui';
+import { StoredImage } from '@/components/stored-image';
+import { flipStyle, isDirectional, Txt, withAlpha } from '@/components/ui';
 import { Font, ReaderThemes, Type, type ReaderTheme } from '@/constants/theme';
 import { HIGHLIGHT_COLORS, type HighlightColor, type Mark, type ReaderPrefs } from '@/data/annotations';
 import { getBooklet, getSubject, getTopic, isStudioBooklet, mcqsOf, topicsOf } from '@/data/content';
 import type { ContentBlock } from '@/data/types';
+import { aiEdit } from '@/lib/editor';
 import { useApp } from '@/store/app-store';
+import { t as tt } from '@/i18n';
 
 type Mode = 'read' | 'highlight' | 'draw';
 type SheetKind = null | 'settings' | 'notes' | 'toc';
@@ -106,6 +109,8 @@ export default function Reader() {
   const [pct, setPct] = useState(0);
   const [viewer, setViewer] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [lastColor, setLastColor] = useState<HighlightColor>('yellow');
+  const [translation, setTranslation] = useState<{ source: string; text: string; loading: boolean; error?: boolean } | null>(null);
 
   const restoreOffset = app.lastRead?.topicId === topicId ? app.lastRead.offset : 0;
 
@@ -215,12 +220,33 @@ export default function Reader() {
     return b.type === 'heading' || b.type === 'paragraph' || b.type === 'callout' ? b.text : '';
   };
 
+  /** Save a highlight right away in the last-used colour and select it (so colour/note/translate are one tap away). */
+  const finalize = (block: number, item: number | undefined, a: number, b: number) => {
+    const start = Math.min(a, b);
+    const end = Math.max(a, b);
+    const id = newMarkId();
+    app.addMark(topic.id, { id, block, item, start, end, color: lastColor, text: wordsOf(textOf(block, item), start, end), createdAt: clock() });
+    setSel(null);
+    setSelMarkId(id);
+  };
+
+  /**
+   * Highlighting by touch:
+   * - long-press a word (or tap it in Highlight mode) to start;
+   * - tap the last word: the phrase is highlighted at once;
+   * - tap the same word again: the whole sentence is highlighted.
+   */
   const onWord = (block: number, item: number | undefined, w: number, long: boolean) => {
     track.current.wordTapAt = clock();
     if (mode === 'draw') return;
     setSelMarkId(null);
-    if (!long && sel && sel.block === block && (sel.item ?? -1) === (item ?? -1)) setSel({ ...sel, b: w });
-    else setSel({ block, item, a: w, b: w });
+    const same = sel && sel.block === block && (sel.item ?? -1) === (item ?? -1);
+    if (!long && same && sel) {
+      if (sel.a === sel.b && sel.a === w) {
+        const [s0, s1] = sentenceAround(textOf(block, item), w);
+        finalize(block, item, s0, s1);
+      } else finalize(block, item, sel.a, w);
+    } else setSel({ block, item, a: w, b: w });
     showChrome(true);
   };
   const onMark = (m: Mark) => {
@@ -234,6 +260,7 @@ export default function Reader() {
   const selText = sel ? wordsOf(textOf(sel.block, sel.item), Math.min(sel.a, sel.b), Math.max(sel.a, sel.b)) : selMark?.text ?? '';
 
   const applyColor = (color: HighlightColor) => {
+    setLastColor(color);
     if (selMark) {
       if (selMark.id.startsWith('legacy-')) {
         app.toggleHighlight(topic.id, selMark.block);
@@ -270,6 +297,16 @@ export default function Reader() {
     setSel(null);
     setSelMarkId(null);
   };
+  const translateSel = async () => {
+    const text = selText;
+    setTranslation({ source: text, text: '', loading: true });
+    try {
+      const out = await aiEdit('translate', text, topic.title);
+      setTranslation({ source: text, text: out.text ?? '', loading: false });
+    } catch (e) {
+      setTranslation({ source: text, text: (e as Error).message, loading: false, error: true });
+    }
+  };
   const askSel = () => {
     const text = selText;
     setSel(null);
@@ -291,7 +328,7 @@ export default function Reader() {
   const openQuiz = (m: 'ministry' | 'instructor' | 'quiz') => router.push({ pathname: '/quiz/[topicId]', params: { topicId: topic.id, mode: m } });
   const openAI = () => router.push({ pathname: '/ai/[topicId]', params: { topicId: topic.id } });
   const comingSoon = () =>
-    Platform.OS === 'web' ? globalThis.alert?.('Coming soon: this feature will be available in a future update.') : Alert.alert('Coming soon', 'This feature will be available in a future update.');
+    Platform.OS === 'web' ? globalThis.alert?.(tt('Coming soon: this feature will be available in a future update.')) : Alert.alert(tt('Coming soon'), tt('This feature will be available in a future update.'));
 
   const setMode2 = (m: Mode) => {
     setMode((cur) => (cur === m ? 'read' : m));
@@ -324,7 +361,7 @@ export default function Reader() {
           pointerEvents={chromeOn ? 'auto' : 'none'}
           style={[styles.top, { paddingTop: insets.top + 6, backgroundColor: rt.chrome, borderBottomColor: rt.border, opacity: chrome, transform: [{ translateY: slideUp }] }]}>
           <Pressable hitSlop={10} onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} style={styles.iconBtn} accessibilityLabel="Back">
-            <ArrowLeft size={21} color={rt.text} strokeWidth={1.6} />
+            <ArrowLeft size={21} color={rt.text} strokeWidth={1.6} style={flipStyle} />
           </Pressable>
           <View style={{ flex: 1, alignItems: 'center' }}>
             <Text numberOfLines={1} style={[styles.topSub, { color: rt.muted }]}>{subject.name} · {booklet.title}</Text>
@@ -351,7 +388,7 @@ export default function Reader() {
               value={query}
               onChangeText={(v) => { setQuery(v); setMatchIdx(0); }}
               onSubmitEditing={() => jumpToMatch(matchIdx + 1)}
-              placeholder="Search in this topic"
+              placeholder={tt('Search in this topic')}
               placeholderTextColor={rt.muted}
               style={[styles.searchInput, { color: rt.text }]}
             />
@@ -378,12 +415,12 @@ export default function Reader() {
               {subject.name.toUpperCase()} · {topic.order}/{siblings.length}
             </Text>
             <Text style={[styles.title, { color: rt.text, fontSize: (tablet ? 30 : 25) * fs, lineHeight: (tablet ? 38 : 32) * fs, fontFamily: prefs.font === 'serif' ? SERIF : Font.semibold }]}>{topic.title}</Text>
-            <Text style={[styles.meta, { color: rt.muted }]}>{topic.minutes} min read{marks.length ? ` · ${marks.length} highlights` : ''}</Text>
+            <Text style={[styles.meta, { color: rt.muted }]}>{tt(`${topic.minutes} min read`)}{marks.length ? ` · ${tt(`${marks.length} highlights`)}` : ''}</Text>
 
             {mode === 'highlight' && !sel && !selMark ? (
               <View style={[styles.hint, { backgroundColor: withAlpha(HIGHLIGHT_COLORS.yellow, 0.22) }]}>
                 <Highlighter size={16} color={rt.text} strokeWidth={1.6} />
-                <Text style={[styles.hintText, { color: rt.text }]}>Tap the first word, then the last word of the part you want.</Text>
+                <Text style={[styles.hintText, { color: rt.text }]}>{tt('Tap the first word, then the last word. Tap a word twice for the whole sentence.')}</Text>
               </View>
             ) : null}
 
@@ -419,7 +456,7 @@ export default function Reader() {
 
             {/* Practice */}
             <View style={[styles.practice, { borderTopColor: rt.border }]}>
-              <Text style={[styles.practiceTitle, { color: rt.text }]}>Practice this topic</Text>
+              <Text style={[styles.practiceTitle, { color: rt.text }]}>{tt('Practice this topic')}</Text>
               <View style={styles.grid}>
                 <Action w={wide} icon={Landmark} label="Ministry MCQs" sub={`${counts.ministry} questions`} onPress={() => openQuiz('ministry')} theme={theme} />
                 <Action w={wide} icon={UserRound} label="Instructor MCQs" sub={`${counts.instructor} questions`} onPress={() => openQuiz('instructor')} theme={theme} />
@@ -437,11 +474,11 @@ export default function Reader() {
                 }}
                 style={({ pressed }) => [styles.next, { backgroundColor: app.isDark ? p.primary : '#17172B' }, pressed && { opacity: 0.9 }]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.nextSub}>{next ? 'Next topic' : 'You reached the end'}</Text>
-                  <Text numberOfLines={1} style={styles.nextTitle}>{next ? next.title : 'Finish booklet'}</Text>
+                  <Text style={styles.nextSub}>{tt(next ? 'Next topic' : 'You reached the end')}</Text>
+                  <Text numberOfLines={1} style={styles.nextTitle}>{next ? next.title : tt('Finish booklet')}</Text>
                 </View>
                 <View style={styles.nextArrow}>
-                  <ArrowRight size={18} color="#17172B" strokeWidth={1.8} />
+                  <ArrowRight size={18} color="#17172B" strokeWidth={1.8} style={flipStyle} />
                 </View>
               </Pressable>
             </View>
@@ -459,11 +496,12 @@ export default function Reader() {
               <View style={styles.selDivider} />
               <SelBtn icon={StickyNote} label={selMark?.note ? 'Edit note' : 'Note'} onPress={() => setNoteEditor({ text: selMark?.note ?? '' })} />
               <SelBtn icon={Copy} label="Copy" onPress={copySel} />
+              <SelBtn icon={Languages} label="Translate" onPress={translateSel} />
               <SelBtn icon={Bot} label="Ask AI" onPress={askSel} />
               {selMark ? <SelBtn icon={Trash2} label="Remove" onPress={removeSelMark} /> : null}
               <SelBtn icon={X} label="Close" onPress={() => { setSel(null); setSelMarkId(null); }} />
             </View>
-            {sel ? <Text style={styles.selHint}>Tap another word to extend · pick a colour to highlight</Text> : selMark?.note ? <Text numberOfLines={2} style={styles.selHint}>✎ {selMark.note}</Text> : null}
+            {sel ? <Text style={styles.selHint}>{tt('Tap the last word to highlight · tap this word again for the whole sentence')}</Text> : selMark?.note ? <Text numberOfLines={2} style={styles.selHint}>✎ {selMark.note}</Text> : null}
           </View>
         ) : null}
 
@@ -486,7 +524,7 @@ export default function Reader() {
               <Mini icon={Undo2} label="Undo stroke" disabled={!drawings.length} onPress={() => app.setDrawing(topic.id, drawings.slice(0, -1))} color={rt.text} />
               <Mini icon={Trash2} label="Clear drawing" disabled={!drawings.length} onPress={() => app.setDrawing(topic.id, [])} color={rt.text} />
               <Pressable onPress={() => setMode2('draw')} style={[styles.done, { backgroundColor: p.primary }]}>
-                <Text style={styles.doneText}>Done</Text>
+                <Text style={styles.doneText}>{tt('Done')}</Text>
               </Pressable>
             </View>
           ) : (
@@ -502,7 +540,7 @@ export default function Reader() {
                 <Mini icon={ChevronRight} label="Next topic" disabled={!next} onPress={() => next && goTopic(next.id)} color={rt.text} />
               </View>
               <Text style={[styles.pageInfo, { color: rt.muted }]}>
-                Topic {topic.order} of {siblings.length} · {Math.round(pct * 100)}%{minutesLeft ? ` · ${minutesLeft} min left` : ''}
+                {tt(`Topic ${topic.order} of ${siblings.length}`)} · {Math.round(pct * 100)}%{minutesLeft ? ` · ${tt(`${minutesLeft} min left`)}` : ''}
               </Text>
             </>
           )}
@@ -519,12 +557,49 @@ export default function Reader() {
       <Modal visible={!!viewer} transparent animationType="fade" onRequestClose={() => setViewer(null)} supportedOrientations={['portrait', 'landscape']}>
         <View style={styles.viewer}>
           <ScrollView maximumZoomScale={4} minimumZoomScale={1} centerContent contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}>
-            {viewer ? <Image source={{ uri: viewer }} style={{ width: '100%', aspectRatio: 1 }} contentFit="contain" /> : null}
+            {viewer ? <StoredImage uri={viewer} style={{ width: '100%', aspectRatio: 1 }} contentFit="contain" /> : null}
           </ScrollView>
           <Pressable onPress={() => setViewer(null)} style={[styles.viewerClose, { top: insets.top + 10 }]} accessibilityLabel="Close image">
             <X size={20} color="#fff" strokeWidth={1.8} />
           </Pressable>
         </View>
+      </Modal>
+
+      {/* Translation */}
+      <Modal visible={!!translation} transparent animationType="fade" onRequestClose={() => setTranslation(null)}>
+        <Pressable style={styles.noteBackdrop} onPress={() => setTranslation(null)}>
+          <Pressable style={[styles.noteCard, { backgroundColor: p.surface }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Languages size={18} color={p.primary} strokeWidth={1.6} />
+              <Txt weight="semibold" size={Type.h2}>Translation</Txt>
+            </View>
+            <Text numberOfLines={4} style={[styles.noteQuote, { color: p.textMuted, borderLeftColor: p.primary }]}>{translation?.source}</Text>
+            {translation?.loading ? (
+              <Txt muted>Translating…</Txt>
+            ) : (
+              <Text selectable style={{ fontFamily: Font.regular, fontSize: 16, lineHeight: 26, color: translation?.error ? '#E5484D' : p.text, writingDirection: /[\u0600-\u06FF]/.test(translation?.text ?? '') ? 'rtl' : 'auto' }}>
+                {translation?.text}
+              </Text>
+            )}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable onPress={() => setTranslation(null)} style={[styles.noteBtn, { borderColor: p.border, borderWidth: 1 }]}>
+                <Txt weight="medium">Close</Txt>
+              </Pressable>
+              {translation && !translation.loading && !translation.error && selMark ? (
+                <Pressable
+                  onPress={() => {
+                    if (selMark && !selMark.id.startsWith('legacy-')) app.updateMark(topic.id, selMark.id, { note: translation.text });
+                    setTranslation(null);
+                    setSelMarkId(null);
+                    flash('Saved as note');
+                  }}
+                  style={[styles.noteBtn, { backgroundColor: p.primary, flex: 1.4 }]}>
+                  <Txt weight="semibold" color="#fff">Save as note</Txt>
+                </Pressable>
+              ) : null}
+            </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* Note editor */}
@@ -538,7 +613,7 @@ export default function Reader() {
               multiline
               value={noteEditor?.text ?? ''}
               onChangeText={(t) => setNoteEditor({ text: t })}
-              placeholder="Write your note…"
+              placeholder={tt('Write your note…')}
               placeholderTextColor={p.textFaint}
               style={[styles.noteInput, { color: p.text, borderColor: p.border, fontFamily: Font.regular }]}
             />
@@ -646,6 +721,17 @@ export default function Reader() {
 /** Timestamps for event handlers (kept outside render). */
 const clock = () => Date.now();
 
+/** Word range [start, end] of the sentence that contains word w. */
+function sentenceAround(text: string, w: number): [number, number] {
+  const words = tokenize(text).filter((t) => t.w >= 0);
+  const ends = (k: number) => /[.!?؟؛:]["')\]]*$/.test(words[k]?.t ?? '');
+  let a = w;
+  while (a > 0 && !ends(a - 1)) a--;
+  let b = w;
+  while (b < words.length - 1 && !ends(b)) b++;
+  return [a, b];
+}
+
 const newMarkId = () => `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
 function blockText(b: ContentBlock) {
@@ -744,7 +830,7 @@ function Block({ block: b, index, body, family, fs, theme, accent, title, marks,
         <View style={{ marginVertical: 10, marginBottom: 20 }}>
           {b.uri ? (
             <Pressable onPress={() => onOpenImage(b.uri!)} accessibilityLabel="Open image">
-              <Image source={{ uri: b.uri }} style={[styles.photo, { borderColor: rt.border }]} contentFit="contain" transition={150} />
+              <StoredImage uri={b.uri} style={[styles.photo, { borderColor: rt.border }]} contentFit="contain" transition={150} />
             </Pressable>
           ) : (
             <View style={[styles.figure, { backgroundColor: withAlpha(accent, theme === 'dark' ? 0.12 : 0.05), borderColor: rt.border }]}>
@@ -783,8 +869,8 @@ function Action({ icon: I, label, sub, onPress, theme, primary, w }: { icon: Luc
     <Pressable onPress={onPress} style={({ pressed }) => [styles.action, { width: w ? '31.8%' : '48.5%', backgroundColor: bg }, pressed && { opacity: 0.8 }]}>
       <I size={19} color={primary ? '#fff' : p.primary} strokeWidth={1.6} />
       <View style={{ flex: 1 }}>
-        <Text numberOfLines={1} style={{ fontFamily: Font.semibold, fontSize: 13, color: primary ? '#fff' : rt.text }}>{label}</Text>
-        <Text numberOfLines={1} style={{ fontFamily: Font.regular, fontSize: 11, color: primary ? 'rgba(255,255,255,0.8)' : rt.muted }}>{sub}</Text>
+        <Text numberOfLines={1} style={{ fontFamily: Font.semibold, fontSize: 13, color: primary ? '#fff' : rt.text }}>{tt(label)}</Text>
+        <Text numberOfLines={1} style={{ fontFamily: Font.regular, fontSize: 11, color: primary ? 'rgba(255,255,255,0.8)' : rt.muted }}>{tt(sub)}</Text>
       </View>
     </Pressable>
   );
@@ -792,8 +878,8 @@ function Action({ icon: I, label, sub, onPress, theme, primary, w }: { icon: Luc
 
 function Mini({ icon: I, label, onPress, disabled, color, active, accent, badge }: { icon: LucideIcon; label: string; onPress: () => void; disabled?: boolean; color: string; active?: boolean; accent?: string; badge?: number }) {
   return (
-    <Pressable disabled={disabled} onPress={onPress} hitSlop={4} style={[styles.mini, active && { backgroundColor: withAlpha(accent ?? '#493BEA', 0.14) }]} accessibilityLabel={label}>
-      <I size={19} color={active ? accent : color} strokeWidth={1.5} style={{ opacity: disabled ? 0.25 : 0.85 }} />
+    <Pressable disabled={disabled} onPress={onPress} hitSlop={4} style={[styles.mini, active && { backgroundColor: withAlpha(accent ?? '#493BEA', 0.14) }]} accessibilityLabel={tt(label)}>
+      <I size={19} color={active ? accent : color} strokeWidth={1.5} style={[{ opacity: disabled ? 0.25 : 0.85 }, isDirectional(I) ? flipStyle : null]} />
       {badge ? (
         <View style={[styles.badge, { backgroundColor: accent }]}>
           <Text style={styles.badgeText}>{badge > 99 ? '99' : badge}</Text>
@@ -805,9 +891,9 @@ function Mini({ icon: I, label, onPress, disabled, color, active, accent, badge 
 
 function SelBtn({ icon: I, label, onPress }: { icon: LucideIcon; label: string; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} hitSlop={4} style={styles.selBtn} accessibilityLabel={label}>
+    <Pressable onPress={onPress} hitSlop={4} style={styles.selBtn} accessibilityLabel={tt(label)}>
       <I size={17} color="#fff" strokeWidth={1.6} />
-      <Text style={styles.selBtnText}>{label}</Text>
+      <Text style={styles.selBtnText}>{tt(label)}</Text>
     </Pressable>
   );
 }

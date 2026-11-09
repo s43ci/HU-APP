@@ -5,8 +5,7 @@
  * made of content blocks, and writes practice MCQs for every topic.
  */
 import { fetchWithRetry, GeminiError } from '@/server/gemini';
-import { extractPdfImages, type ExtractedImage } from '@/server/pdf-images';
-import { readUpload, toBase64 } from '@/server/upload';
+import { geminiPart, readUpload } from '@/server/upload';
 
 const MODEL = 'gemini-3.5-flash-lite';
 
@@ -34,6 +33,14 @@ Rules:
 - For PDFs, give every block "page" = the page number (1-based) where it appears; use 0 for other files.
 - "title" is the booklet title (from the document; otherwise a short descriptive title). "language" is the document's main language in English (e.g. "English", "Arabic").
 - For every topic write 3 to 5 multiple-choice questions in the same language as the document, based only on that topic. Each has exactly 4 options, answerIndex 0-3 for the correct one, and a one-sentence explanation.`;
+
+/** "Original" mode: layout exactly as in the file. */
+const ORIGINAL = `
+
+Original layout mode (on):
+- Keep the document exactly as it is laid out: same paragraphs, same lists, same tables, same order, same wording.
+- Do NOT add anything: no summaries, no "Key points", no "Exam tip" boxes, no new headings, no rewording, no merging or splitting of paragraphs.
+- Use "callout" only for boxes that already exist in the file, and "heading" only for headings that already exist.`;
 
 /** "AI design" mode: same facts, clearer booklet structure. */
 const ENHANCE = `
@@ -111,14 +118,20 @@ export async function POST(request: Request) {
 
   const read = await readUpload(request);
   if (!read.ok) return json({ error: read.error }, read.status);
-  const { name, mime, ext, bytes, part, options } = read.upload;
+  const upload = read.upload;
+  const { name, options } = upload;
   const enhanced = options.design !== 'original';
   const perTopic = Math.min(8, Math.max(2, Number(options.questionsPerTopic) || 4));
-  const prompt = PROMPT.replace('3 to 5 multiple-choice questions', `${perTopic} multiple-choice questions`) + (enhanced ? ENHANCE : '');
+  const prompt = PROMPT.replace('3 to 5 multiple-choice questions', `${perTopic} multiple-choice questions`) + (enhanced ? ENHANCE : ORIGINAL);
 
-  // Pull pictures out of PDFs while the AI reads the text.
-  const isPdf = ext === 'pdf' || mime === 'application/pdf';
-  const imagesPromise: Promise<ExtractedImage[]> = isPdf ? extractPdfImages(bytes).catch(() => []) : Promise.resolve([]);
+  // Images are extracted by the app itself (src/lib/pdf-images.ts), so the server only forwards the file.
+  let part: Record<string, unknown>;
+  let cleanup = async () => {};
+  try {
+    ({ part, cleanup } = await geminiPart(upload, key));
+  } catch (e) {
+    return json({ error: (e as Error).message || 'Could not send the file to the AI service.' }, 502);
+  }
 
   let res: Response;
   try {
@@ -132,8 +145,10 @@ export async function POST(request: Request) {
       }),
     });
   } catch (e) {
+    await cleanup();
     return json({ error: (e as GeminiError).message }, 503);
   }
+  await cleanup();
   if (res.status === 429) return json({ error: 'The service is busy. Try again in a minute.' }, 429);
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
@@ -155,56 +170,16 @@ export async function POST(request: Request) {
 
   const booklet = clean(parsed, name);
   if (!booklet.topics.length) return json({ error: 'No readable content was found in this file.' }, 422);
-  const images = await imagesPromise;
-  placeImages(booklet.topics, images);
-  for (const t of booklet.topics) for (const b of t.blocks as { _page?: number }[]) delete b._page;
-  return json({
-    booklet,
-    images: images.map((im, i) => ({ ref: i, mime: im.mime, data: toBase64(im.data) })),
-    truncated: cand?.finishReason === 'MAX_TOKENS',
-  });
+  // Each block keeps its PDF page number ("page") so the app can place the images it extracted.
+  for (const t of booklet.topics)
+    for (const b of t.blocks as { _page?: number; page?: number }[]) {
+      b.page = b._page ?? 0;
+      delete b._page;
+    }
+  return json({ booklet, truncated: cand?.finishReason === 'MAX_TOKENS' });
 }
 
 // ---------- helpers ----------
-
-type PlacedBlock = { type: string; caption?: string; imageRef?: number; icon?: string; _page?: number };
-
-/**
- * Put each extracted picture into the booklet:
- * 1) into a figure block from the same page (in order), else
- * 2) as a new figure right after the last block from that page (or an earlier one).
- */
-function placeImages(topics: { blocks: unknown[] }[], images: ExtractedImage[]) {
-  if (!images.length) return;
-  const pages = Math.max(1, ...images.map((im) => im.page));
-  const known = topics.some((t) => (t.blocks as PlacedBlock[]).some((b) => (b._page ?? 0) > 0));
-  images.forEach((im, ref) => {
-    for (const t of topics) {
-      const fig = (t.blocks as PlacedBlock[]).find((b) => b.type === 'image' && b.imageRef == null && b._page === im.page);
-      if (fig) {
-        fig.imageRef = ref;
-        return;
-      }
-    }
-    const block: PlacedBlock = { type: 'image', caption: '', icon: 'image', imageRef: ref, _page: im.page };
-    if (known) {
-      let target: { t: number; i: number } | null = null;
-      topics.forEach((t, ti) =>
-        (t.blocks as PlacedBlock[]).forEach((b, bi) => {
-          if ((b._page ?? 0) > 0 && (b._page ?? 0) <= im.page) target = { t: ti, i: bi };
-        }),
-      );
-      const tg = target as { t: number; i: number } | null;
-      if (tg) {
-        topics[tg.t].blocks.splice(tg.i + 1, 0, block);
-        return;
-      }
-    }
-    // No page information: place proportionally through the booklet.
-    const ti = Math.min(topics.length - 1, Math.floor(((im.page - 1) / pages) * topics.length));
-    topics[ti].blocks.push(block);
-  });
-}
 
 function clean(b: RawBooklet, fileName: string) {
   const s = (v: unknown) => (typeof v === 'string' ? v.trim() : '');

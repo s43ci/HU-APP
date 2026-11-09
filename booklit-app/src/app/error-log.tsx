@@ -8,6 +8,7 @@ import { Button, Card, EmptyState, TopBar, Txt } from '@/components/ui';
 import { Brand, Font, Type } from '@/constants/theme';
 import { clearLog, deviceInfo, formatReport, getLog, subscribeLog, type LogEntry } from '@/lib/log';
 import { useApp } from '@/store/app-store';
+import { t as tt } from '@/i18n';
 
 const LEVEL_COLOR = { error: Brand.danger, warn: Brand.warning, info: '#7C7C93' };
 
@@ -41,9 +42,9 @@ export default function ErrorLog() {
   };
   const clear = () => {
     if (Platform.OS === 'web') return void clearLog();
-    Alert.alert('Clear the error log?', 'This removes all saved entries on this device.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Clear', style: 'destructive', onPress: () => void clearLog() },
+    Alert.alert(tt('Clear the error log?'), tt('This removes all saved entries on this device.'), [
+      { text: tt('Cancel'), style: 'cancel' },
+      { text: tt('Clear'), style: 'destructive', onPress: () => void clearLog() },
     ]);
   };
 

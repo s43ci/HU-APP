@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import {
   ArrowDown,
   Camera,
@@ -20,7 +19,9 @@ import { Font, Type } from '@/constants/theme';
 import type { ContentBlock } from '@/data/types';
 import { BLOCK_LABELS } from '@/lib/editor';
 import { usePalette } from '@/store/app-store';
+import { StoredImage } from '../stored-image';
 import { Icon, Txt } from '../ui';
+import { t as tt } from '@/i18n';
 
 const isRtl = (s: string) => /[֐-ࣿ]/.test(s.slice(0, 60));
 
@@ -62,11 +63,11 @@ export function BlockEditor({ block: b, index, count, busy, onChange, onMove, on
       </View>
 
       {b.type === 'heading' ? (
-        <TextInput value={b.text} onChangeText={(text) => onChange({ ...b, text })} placeholder="Heading" placeholderTextColor={p.textFaint} style={input([{ fontFamily: Font.semibold, fontSize: 17 }, dir(b.text)])} />
+        <TextInput value={b.text} onChangeText={(text) => onChange({ ...b, text })} placeholder={tt('Heading')} placeholderTextColor={p.textFaint} style={input([{ fontFamily: Font.semibold, fontSize: 17 }, dir(b.text)])} />
       ) : null}
 
       {b.type === 'paragraph' ? (
-        <TextInput multiline value={b.text} onChangeText={(text) => onChange({ ...b, text })} placeholder="Write a paragraph…" placeholderTextColor={p.textFaint} style={input([{ minHeight: 90, textAlignVertical: 'top' }, dir(b.text)])} />
+        <TextInput multiline value={b.text} onChangeText={(text) => onChange({ ...b, text })} placeholder={tt('Write a paragraph…')} placeholderTextColor={p.textFaint} style={input([{ minHeight: 90, textAlignVertical: 'top' }, dir(b.text)])} />
       ) : null}
 
       {b.type === 'list' ? (
@@ -78,7 +79,7 @@ export function BlockEditor({ block: b, index, count, busy, onChange, onMove, on
                 multiline
                 value={it}
                 onChangeText={(t) => onChange({ ...b, items: b.items.map((x, k) => (k === i ? t : x)) })}
-                placeholder={`Item ${i + 1}`}
+                placeholder={tt(`Item ${i + 1}`)}
                 placeholderTextColor={p.textFaint}
                 style={input([{ flex: 1 }, dir(it)])}
               />
@@ -143,8 +144,8 @@ export function BlockEditor({ block: b, index, count, busy, onChange, onMove, on
               </Pressable>
             ))}
           </View>
-          <TextInput value={b.title} onChangeText={(title) => onChange({ ...b, title })} placeholder="Title" placeholderTextColor={p.textFaint} style={input({ fontFamily: Font.semibold })} />
-          <TextInput multiline value={b.text} onChangeText={(text) => onChange({ ...b, text })} placeholder="Note text…" placeholderTextColor={p.textFaint} style={input([{ minHeight: 70, textAlignVertical: 'top' }, dir(b.text)])} />
+          <TextInput value={b.title} onChangeText={(title) => onChange({ ...b, title })} placeholder={tt('Title')} placeholderTextColor={p.textFaint} style={input({ fontFamily: Font.semibold })} />
+          <TextInput multiline value={b.text} onChangeText={(text) => onChange({ ...b, text })} placeholder={tt('Note text…')} placeholderTextColor={p.textFaint} style={input([{ minHeight: 70, textAlignVertical: 'top' }, dir(b.text)])} />
         </View>
       ) : null}
 
@@ -152,7 +153,7 @@ export function BlockEditor({ block: b, index, count, busy, onChange, onMove, on
         <View style={{ gap: 8 }}>
           {b.uri ? (
             <View>
-              <Image source={{ uri: b.uri }} style={styles.image} contentFit="contain" />
+              <StoredImage uri={b.uri} style={styles.image} contentFit="contain" />
               <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
                 <SmallButton icon={ImagePlus} label="Replace" onPress={() => onPickImage('library')} />
                 <SmallButton icon={Camera} label="Camera" onPress={() => onPickImage('camera')} />
@@ -171,7 +172,7 @@ export function BlockEditor({ block: b, index, count, busy, onChange, onMove, on
               </Pressable>
             </View>
           )}
-          <TextInput value={b.caption} onChangeText={(caption) => onChange({ ...b, caption })} placeholder="Caption" placeholderTextColor={p.textFaint} style={input([{ fontSize: 13 }, dir(b.caption)])} />
+          <TextInput value={b.caption} onChangeText={(caption) => onChange({ ...b, caption })} placeholder={tt('Caption')} placeholderTextColor={p.textFaint} style={input([{ fontSize: 13 }, dir(b.caption)])} />
         </View>
       ) : null}
     </View>

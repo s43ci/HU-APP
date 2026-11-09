@@ -2,6 +2,7 @@ import { getBooklet, getSubject, topicPlainText } from '@/data/content';
 import type { Topic } from '@/data/types';
 
 import { log, logError } from './log';
+import { consume } from './usage';
 
 export type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -11,6 +12,7 @@ export const API_BASE = (process.env.EXPO_PUBLIC_API_BASE || 'https://booklit.ex
 export async function askAI(topic: Topic, history: ChatMessage[]): Promise<string> {
   const booklet = getBooklet(topic.bookletId)!;
   const subject = getSubject(booklet.subjectId)!;
+  await consume('ask');
   let res: Response;
   try {
     res = await fetch(`${API_BASE}/api/ask`, {
@@ -20,8 +22,9 @@ export async function askAI(topic: Topic, history: ChatMessage[]): Promise<strin
       subject: subject.name,
       booklet: booklet.title,
       topic: topic.title,
-      topicText: topicPlainText(topic),
-      messages: history,
+      topicText: topicPlainText(topic).slice(0, 12000),
+      // Only the last few turns are needed for context (keeps each request small).
+      messages: history.slice(-6),
     }),
     });
   } catch (e) {

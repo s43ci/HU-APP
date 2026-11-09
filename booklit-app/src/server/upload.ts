@@ -19,23 +19,44 @@ export type Upload = {
   mime: string;
   ext: string;
   bytes: Uint8Array;
-  /** Gemini content part: inline file (PDF/image) or extracted text. */
-  part: Record<string, unknown>;
-  /** Extra options sent with the file (JSON "options" field). */
+  /** Text extracted on the server (Word, PowerPoint, text files). Null for PDF/images. */
+  text: string | null;
+  /** MIME type sent to Gemini for PDF/images. */
+  fileMime: string;
+  /** Extra options sent with the file. */
   options: Record<string, unknown>;
 };
 
+const decodeHeader = (v: string | null) => {
+  if (!v) return '';
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+};
+
 /**
- * Read a file from multipart form data ("file" + optional "options" JSON string, used by the web app)
- * or JSON { name, mimeType, data: base64, options } (used by the iOS/Android app).
+ * Read an uploaded file. Three ways in:
+ * - raw bytes (Content-Type: application/octet-stream) with X-File-Name / X-File-Type / X-Options headers
+ *   (used by the apps: no base64 or form parsing, so the server does almost no work);
+ * - multipart form data ("file" + "options");
+ * - JSON { name, mimeType, data: base64, options } (older app versions).
  */
 export async function readUpload(request: Request): Promise<{ ok: true; upload: Upload } | { ok: false; error: string; status: number }> {
   let name = 'document';
   let mime = '';
   let bytes: Uint8Array;
   let options: Record<string, unknown> = {};
+  const ctype = request.headers.get('content-type') ?? '';
   try {
-    if ((request.headers.get('content-type') ?? '').includes('application/json')) {
+    if (ctype.includes('application/octet-stream')) {
+      name = decodeHeader(request.headers.get('x-file-name')) || name;
+      mime = decodeHeader(request.headers.get('x-file-type'));
+      const o = decodeHeader(request.headers.get('x-options'));
+      if (o) options = JSON.parse(o);
+      bytes = new Uint8Array(await request.arrayBuffer());
+    } else if (ctype.includes('application/json')) {
       const body = (await request.json()) as { name?: string; mimeType?: string; data?: string; options?: Record<string, unknown> };
       if (!body.data) return { ok: false, error: 'No file received.', status: 400 };
       name = body.name || name;
@@ -60,24 +81,74 @@ export async function readUpload(request: Request): Promise<{ ok: true; upload: 
   if (!bytes.length) return { ok: false, error: 'The file is empty.', status: 400 };
 
   const ext = name.toLowerCase().split('.').pop() ?? '';
-  let part: Record<string, unknown>;
+  let text: string | null = null;
+  let fileMime = '';
   try {
     if (INLINE_TYPES[ext] || mime === 'application/pdf' || mime.startsWith('image/')) {
-      part = { inlineData: { mimeType: INLINE_TYPES[ext] ?? mime, data: toBase64(bytes) } };
+      fileMime = INLINE_TYPES[ext] ?? mime;
     } else if (ext === 'docx') {
-      part = { text: `Document "${name}":\n\n${docxText(bytes)}` };
+      text = `Document "${name}":\n\n${docxText(bytes)}`;
     } else if (ext === 'pptx') {
-      part = { text: `Slides "${name}":\n\n${pptxText(bytes)}` };
+      text = `Slides "${name}":\n\n${pptxText(bytes)}`;
     } else if (TEXT_EXT.includes(ext) || mime.startsWith('text/')) {
-      part = { text: `Document "${name}":\n\n${new TextDecoder().decode(bytes)}` };
+      text = `Document "${name}":\n\n${new TextDecoder().decode(bytes)}`;
     } else {
       return { ok: false, error: 'Unsupported file type. Use PDF, Word (.docx), PowerPoint (.pptx), an image, or a text file.', status: 415 };
     }
   } catch {
     return { ok: false, error: 'Could not read this file. Is it damaged or password-protected?', status: 422 };
   }
-  if ('text' in part && String(part.text).trim().length < 40) return { ok: false, error: 'The file has almost no readable text.', status: 422 };
-  return { ok: true, upload: { name, mime, ext, bytes, part, options } };
+  if (text !== null && text.trim().length < 40) return { ok: false, error: 'The file has almost no readable text.', status: 422 };
+  return { ok: true, upload: { name, mime, ext, bytes, text, fileMime, options } };
+}
+
+const INLINE_LIMIT = 3 * 1024 * 1024;
+
+/**
+ * Turn the upload into a Gemini content part. Small files go inline; larger PDFs/images are
+ * streamed to the Gemini Files API so this server never base64-encodes big files
+ * (that work used to hit the hosting CPU limit and return 504).
+ * Returns a cleanup function that deletes the temporary Gemini file.
+ */
+export async function geminiPart(up: Upload, key: string): Promise<{ part: Record<string, unknown>; cleanup: () => Promise<void> }> {
+  const none = async () => {};
+  if (up.text !== null) return { part: { text: up.text }, cleanup: none };
+  if (up.bytes.length <= INLINE_LIMIT) return { part: { inlineData: { mimeType: up.fileMime, data: toBase64(up.bytes) } }, cleanup: none };
+
+  const start = await fetch('https://generativelanguage.googleapis.com/upload/v1beta/files', {
+    method: 'POST',
+    headers: {
+      'x-goog-api-key': key,
+      'X-Goog-Upload-Protocol': 'resumable',
+      'X-Goog-Upload-Command': 'start',
+      'X-Goog-Upload-Header-Content-Length': String(up.bytes.length),
+      'X-Goog-Upload-Header-Content-Type': up.fileMime,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ file: { display_name: up.name.slice(0, 100) } }),
+  });
+  const uploadUrl = start.headers.get('x-goog-upload-url');
+  if (!start.ok || !uploadUrl) throw new Error(`File upload to the AI service failed (${start.status}).`);
+  const done = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: { 'X-Goog-Upload-Offset': '0', 'X-Goog-Upload-Command': 'upload, finalize' },
+    body: up.bytes as unknown as BodyInit,
+  });
+  if (!done.ok) throw new Error(`File upload to the AI service failed (${done.status}).`);
+  let file = ((await done.json()) as { file: { name: string; uri: string; state: string } }).file;
+  // Large PDFs can need a moment of processing before they can be used.
+  for (let i = 0; i < 30 && file.state === 'PROCESSING'; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/${file.name}`, { headers: { 'x-goog-api-key': key } });
+    file = (await r.json()) as typeof file;
+  }
+  if (file.state === 'FAILED') throw new Error('The AI service could not read this file.');
+  return {
+    part: { fileData: { mimeType: up.fileMime, fileUri: file.uri } },
+    cleanup: async () => {
+      await fetch(`https://generativelanguage.googleapis.com/v1beta/${file.name}`, { method: 'DELETE', headers: { 'x-goog-api-key': key } }).catch(() => {});
+    },
+  };
 }
 
 export function fromBase64(b64: string) {

@@ -5,6 +5,7 @@ import {
   Dna,
   FlaskConical,
   HeartPulse,
+  Pill,
   Braces,
   Crown,
   Droplet,
@@ -35,6 +36,8 @@ const ICONS: Record<string, LucideIcon> = {
   'oral-histology': Microscope,
   'dental-materials': FlaskConical,
   physiology: HeartPulse,
+  pharmacology: Pill,
+  'general-medicine': Stethoscope,
 };
 
 export function subjectVisual(subjectId: string): { icon: LucideIcon; image?: number } {

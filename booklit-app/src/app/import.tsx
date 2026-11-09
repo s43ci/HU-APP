@@ -66,7 +66,9 @@ export default function ImportScreen() {
     abort.current = new AbortController();
     const timer = setTimeout(() => abort.current?.abort(), 5 * 60 * 1000);
     try {
-      const { booklet } = await convertFile(file, opts, abort.current.signal);
+      const { booklet } = await convertFile(file, { ...opts, unlimited: app.canUpload }, abort.current.signal, (stage) => {
+        if (stage === 'images') setState((st) => ({ ...st, step: Math.max(st.step, 4) }));
+      });
       app.addImported(booklet);
       router.replace({ pathname: '/subject/[id]', params: { id: opts.subjectId ?? UPLOADS_SUBJECT.id, booklet: booklet.id } });
     } catch (e) {

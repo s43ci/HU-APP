@@ -9,6 +9,7 @@ import { Font, Type } from '@/constants/theme';
 import { booklets, getBooklet, getSubject, getTopic, mcqs, subjects, topics } from '@/data/content';
 import { isSubjectUnlocked } from '@/lib/progress';
 import { useApp } from '@/store/app-store';
+import { t as tt } from '@/i18n';
 
 export default function Search() {
   const app = useApp();
@@ -41,7 +42,7 @@ export default function Search() {
             autoFocus
             value={q}
             onChangeText={setQ}
-            placeholder="Booklets, topics or MCQs"
+            placeholder={tt('Booklets, topics or MCQs')}
             placeholderTextColor={p.textFaint}
             style={{ flex: 1, color: p.text, fontFamily: Font.regular, fontSize: 14.5, paddingVertical: 11 }}
           />

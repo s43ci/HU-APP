@@ -10,6 +10,7 @@ import type { Role } from '@/data/annotations';
 import { getBooklet, getSubject, getTopic, stages } from '@/data/content';
 import type { StageId } from '@/data/types';
 import { useApp, type Appearance } from '@/store/app-store';
+import { setLanguage, t as tt } from '@/i18n';
 
 const TITLES: Record<string, string> = {
   account: 'Account & plan',
@@ -64,7 +65,14 @@ export default function Settings() {
         {key === 'language' ? (
           <Card style={{ paddingHorizontal: 8 }}>
             {(['English', 'العربية'] as const).map((l, i) => (
-              <Pressable key={l} onPress={() => app.set({ language: l })} style={[styles.option, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: p.border }]}>
+              <Pressable
+                key={l}
+                onPress={() => {
+                  app.set({ language: l });
+                  // Restart in the chosen language (Arabic switches the whole app to right-to-left).
+                  setTimeout(() => void setLanguage(l === 'العربية' ? 'ar' : 'en'), 400);
+                }}
+                style={[styles.option, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: p.border }]}>
                 <Txt weight="medium" style={{ flex: 1 }}>{l}</Txt>
                 {app.language === l ? <Icon as={Check} size={18} color={p.primary} /> : null}
               </Pressable>
@@ -175,7 +183,7 @@ function Account() {
             value={code}
             onChangeText={(t) => { setCode(t); setWrong(false); }}
             secureTextEntry
-            placeholder="Enter code"
+            placeholder={tt('Enter code')}
             placeholderTextColor={p.textFaint}
             style={[styles.code, { color: p.text, borderColor: wrong ? '#E5484D' : p.border, fontFamily: Font.regular }]}
           />

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { LockedModal } from '@/components/locked-modal';
-import { ArrowCircle, Card, Chip, CircleButton, Heading, Icon, Page, SectionTitle, SubjectThumb, Txt } from '@/components/ui';
+import { ArrowCircle, Card, Chip, CircleButton, Heading, Icon, Page, SectionTitle, SubjectThumb, Txt, TabHeader } from '@/components/ui';
 import { Type } from '@/constants/theme';
 import { bookletsOf, courseSubjects, stages, topicsOf, topicsOfSubject, UPLOADS_SUBJECT } from '@/data/content';
 import type { StageId, Subject } from '@/data/types';
@@ -36,10 +36,7 @@ export default function Library() {
 
   return (
     <Page>
-      <View style={styles.top}>
-        <Txt weight="medium" muted size={Type.small}>Library</Txt>
-        {app.canUpload ? <CircleButton icon={Wand2} label="BOOKLIT Studio" onPress={() => router.push('/studio')} /> : <View />}
-      </View>
+      <TabHeader title="Library" right={app.canUpload ? <CircleButton icon={Wand2} label="BOOKLIT Studio" size={40} onPress={() => router.push('/studio')} /> : undefined} />
 
       <View style={styles.headRow}>
         <View style={{ flex: 1 }}>

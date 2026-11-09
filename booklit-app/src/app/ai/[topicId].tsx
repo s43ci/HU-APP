@@ -19,6 +19,7 @@ import { Font, Type } from '@/constants/theme';
 import { getBooklet, getSubject, getTopic } from '@/data/content';
 import { askAI, type ChatMessage } from '@/lib/ai';
 import { useApp } from '@/store/app-store';
+import { t as tt } from '@/i18n';
 
 const SUGGESTIONS: { label: string; prompt: string; icon: LucideIcon }[] = [
   { label: 'Explain simply', prompt: 'Explain this topic simply.', icon: WandSparkles },
@@ -140,7 +141,7 @@ export default function AskAI() {
           <TextInput
             value={input}
             onChangeText={setInput}
-            placeholder="Ask a question…"
+            placeholder={tt('Ask a question…')}
             placeholderTextColor={p.textFaint}
             multiline
             style={[styles.input, { color: p.text, fontFamily: Font.regular }]}

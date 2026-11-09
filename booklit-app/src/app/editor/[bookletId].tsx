@@ -11,6 +11,7 @@ import type { ImportedBooklet, Topic } from '@/data/types';
 import { generateMcqs, newId } from '@/lib/editor';
 import { logError } from '@/lib/log';
 import { useApp } from '@/store/app-store';
+import { t as tt } from '@/i18n';
 
 export default function BookletEditor() {
   const { bookletId } = useLocalSearchParams<{ bookletId: string }>();
@@ -54,9 +55,9 @@ export default function BookletEditor() {
     const doIt = () =>
       save({ ...booklet, topics: renumber(booklet.topics.filter((x) => x.id !== t.id)), mcqs: booklet.mcqs.filter((q) => q.topicId !== t.id) });
     if (Platform.OS === 'web') return doIt();
-    Alert.alert('Delete this topic?', t.title, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: doIt },
+    Alert.alert(tt('Delete this topic?'), t.title, [
+      { text: tt('Cancel'), style: 'cancel' },
+      { text: tt('Delete'), style: 'destructive', onPress: doIt },
     ]);
   };
 
@@ -72,9 +73,9 @@ export default function BookletEditor() {
       router.replace('/library');
     };
     if (Platform.OS === 'web') return doIt();
-    Alert.alert('Delete this booklet?', 'All its topics and questions will be removed.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: doIt },
+    Alert.alert(tt('Delete this booklet?'), tt('All its topics and questions will be removed.'), [
+      { text: tt('Cancel'), style: 'cancel' },
+      { text: tt('Delete'), style: 'destructive', onPress: doIt },
     ]);
   };
 
@@ -121,7 +122,7 @@ export default function BookletEditor() {
         <TextInput
           value={booklet.title}
           onChangeText={(title) => save({ ...booklet, title })}
-          placeholder="Booklet title"
+          placeholder={tt('Booklet title')}
           placeholderTextColor={p.textFaint}
           multiline
           style={[styles.title, { color: p.text, fontFamily: Font.semibold }]}

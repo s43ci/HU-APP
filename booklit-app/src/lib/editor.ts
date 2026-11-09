@@ -5,7 +5,9 @@ import { Platform } from 'react-native';
 import { topicPlainText } from '@/data/content';
 import type { ContentBlock, ImportedBooklet, Mcq, Topic } from '@/data/types';
 import { API_BASE } from './ai';
+import { deleteImages, persistWebImage } from './image-store';
 import { log, logError } from './log';
+import { consume } from './usage';
 
 export type AiAction = 'simplify' | 'fix' | 'translate' | 'bullets' | 'note' | 'expand';
 
@@ -25,11 +27,13 @@ async function post<T>(path: string, body: unknown, area: string): Promise<T> {
   return data;
 }
 
-export function aiEdit(action: AiAction, text: string, topic?: string) {
+export async function aiEdit(action: AiAction, text: string, topic?: string) {
+  await consume('edit');
   return post<{ text?: string; items?: string[] }>('/api/edit', { action, text, topic }, 'editor-ai');
 }
 
 export async function generateMcqs(topic: Topic, existing: Mcq[], count = 5): Promise<Mcq[]> {
+  await consume('mcq');
   const out = await post<{ mcqs: Omit<Mcq, 'id' | 'topicId' | 'source'>[] }>(
     '/api/mcq',
     { topic: topic.title, text: topicPlainText(topic), count, avoid: existing.map((q) => q.question) },
@@ -43,7 +47,7 @@ export function newId(prefix: string) {
 }
 
 /** Pick a photo (gallery or camera) and keep a private copy so it survives app restarts. */
-export async function pickImage(source: 'library' | 'camera' = 'library'): Promise<string | null> {
+export async function pickImage(source: 'library' | 'camera' = 'library', bookletId = 'picked'): Promise<string | null> {
   if (source === 'camera') {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) throw new Error('Camera permission was not granted.');
@@ -52,7 +56,7 @@ export async function pickImage(source: 'library' | 'camera' = 'library'): Promi
   const res = source === 'camera' ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
   if (res.canceled || !res.assets?.[0]) return null;
   const uri = res.assets[0].uri;
-  if (Platform.OS === 'web') return uri;
+  if (Platform.OS === 'web') return persistWebImage(bookletId, uri);
   try {
     const dir = new Directory(Paths.document, 'booklit-images');
     dir.create({ idempotent: true, intermediates: true });
@@ -140,13 +144,7 @@ export function newBlankBooklet(): ImportedBooklet {
   };
 }
 
-/** Delete the image files that belong to a booklet (native only). */
+/** Delete the image files that belong to a booklet. */
 export function deleteBookletImages(bookletId: string) {
-  if (Platform.OS === 'web') return;
-  try {
-    const dir = new Directory(Paths.document, 'booklit-images', bookletId);
-    if (dir.exists) dir.delete();
-  } catch (e) {
-    logError('editor-image', e, { step: 'delete', bookletId });
-  }
+  void deleteImages(bookletId);
 }

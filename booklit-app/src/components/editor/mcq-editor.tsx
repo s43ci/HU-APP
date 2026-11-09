@@ -6,6 +6,7 @@ import type { Mcq } from '@/data/types';
 import { usePalette } from '@/store/app-store';
 import { Icon, Txt } from '../ui';
 import { SmallButton } from './block-editor';
+import { t as tt } from '@/i18n';
 
 const SOURCE: Record<Mcq['source'], string> = { ministry: 'Ministry', instructor: 'Instructor', generated: 'Practice' };
 
@@ -28,7 +29,7 @@ export function McqEditor({ q, index, onChange, onDelete }: { q: Mcq; index: num
           <Icon as={X} size={17} color="#E5484D" />
         </Pressable>
       </View>
-      <TextInput multiline value={q.question} onChangeText={(question) => onChange({ ...q, question })} placeholder="Question" placeholderTextColor={p.textFaint} style={input({ fontFamily: Font.medium })} />
+      <TextInput multiline value={q.question} onChangeText={(question) => onChange({ ...q, question })} placeholder={tt('Question')} placeholderTextColor={p.textFaint} style={input({ fontFamily: Font.medium })} />
       <Txt faint size={Type.tiny}>Tap the circle to mark the correct answer</Txt>
       {q.options.map((o, i) => {
         const right = q.answerIndex === i;
@@ -40,7 +41,7 @@ export function McqEditor({ q, index, onChange, onDelete }: { q: Mcq; index: num
               accessibilityLabel={`Mark option ${i + 1} correct`}>
               {right ? <Icon as={Check} size={13} color="#fff" stroke={2.2} /> : <Txt size={11} muted>{String.fromCharCode(65 + i)}</Txt>}
             </Pressable>
-            <TextInput value={o} onChangeText={(t) => onChange({ ...q, options: q.options.map((x, k) => (k === i ? t : x)) })} placeholder={`Option ${String.fromCharCode(65 + i)}`} placeholderTextColor={p.textFaint} style={input({ flex: 1, paddingVertical: 8 })} />
+            <TextInput value={o} onChangeText={(t) => onChange({ ...q, options: q.options.map((x, k) => (k === i ? t : x)) })} placeholder={tt(`Option ${String.fromCharCode(65 + i)}`)} placeholderTextColor={p.textFaint} style={input({ flex: 1, paddingVertical: 8 })} />
             {q.options.length > 2 ? (
               <Pressable
                 hitSlop={8}
@@ -57,7 +58,7 @@ export function McqEditor({ q, index, onChange, onDelete }: { q: Mcq; index: num
         );
       })}
       {q.options.length < 5 ? <SmallButton icon={Plus} label="Add option" onPress={() => onChange({ ...q, options: [...q.options, ''] })} /> : null}
-      <TextInput multiline value={q.explanation} onChangeText={(explanation) => onChange({ ...q, explanation })} placeholder="Explanation (shown after answering)" placeholderTextColor={p.textFaint} style={input({ fontSize: 13 })} />
+      <TextInput multiline value={q.explanation} onChangeText={(explanation) => onChange({ ...q, explanation })} placeholder={tt('Explanation (shown after answering)')} placeholderTextColor={p.textFaint} style={input({ fontSize: 13 })} />
     </View>
   );
 }

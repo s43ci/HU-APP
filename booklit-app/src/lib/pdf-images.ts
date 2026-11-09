@@ -55,6 +55,8 @@ export async function extractPdfImages(bytes: Uint8Array): Promise<ExtractedImag
   let total = 0;
   for (const f of found) {
     if (out.length >= MAX_IMAGES) break;
+    // Let the screen update between pictures (this runs on the phone).
+    await new Promise((r) => setTimeout(r, 0));
     // The same picture on 3+ pages is a logo / header decoration.
     if ((pagesPerKey.get(f.key)?.size ?? 0) >= 3) continue;
     try {

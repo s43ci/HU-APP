@@ -11,6 +11,7 @@ import { Font, Type } from '@/constants/theme';
 import { stages } from '@/data/content';
 import type { StageId } from '@/data/types';
 import { useApp } from '@/store/app-store';
+import { IS_AR, setLanguage, t as tt } from '@/i18n';
 
 export default function Welcome() {
   const insets = useSafeAreaInsets();
@@ -27,7 +28,14 @@ export default function Welcome() {
           <View style={styles.logo}>
             <Image source={require('@/assets/images/logo-mark.png')} style={{ width: 44, height: 44 }} />
           </View>
-          <Txt style={{ fontFamily: Font.semibold, fontSize: 20 }}>Booklit</Txt>
+          <Txt style={{ fontFamily: Font.semibold, fontSize: 20, flex: 1 }}>Booklit</Txt>
+          <Chip
+            label={IS_AR ? 'English' : 'العربية'}
+            onPress={() => {
+              set({ language: IS_AR ? 'English' : 'العربية' });
+              void setLanguage(IS_AR ? 'en' : 'ar');
+            }}
+          />
         </View>
 
         <View style={{ marginTop: 40 }}>
@@ -38,7 +46,7 @@ export default function Welcome() {
         </View>
 
         <View style={{ gap: 14, marginTop: 34 }}>
-          <Field label="Full name" value={name} onChangeText={setName} placeholder="e.g. Ahmed Ali" autoCapitalize="words" />
+          <Field label="Full name" value={name} onChangeText={setName} placeholder={tt('e.g. Ahmed Ali')} autoCapitalize="words" />
           <Field label="Email (optional)" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
           <Txt weight="medium" size={Type.tiny} muted style={{ marginLeft: 4, marginTop: 4 }}>Stage</Txt>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>

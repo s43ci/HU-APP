@@ -9,6 +9,7 @@ import { Type } from '@/constants/theme';
 import { bookletsOf, getSubject, isStudioBooklet, stageName, topicsOf, topicsOfSubject, UPLOADS_SUBJECT } from '@/data/content';
 import { bookletProgress } from '@/lib/progress';
 import { useApp } from '@/store/app-store';
+import { t as tt } from '@/i18n';
 
 export default function SubjectScreen() {
   const { id, booklet } = useLocalSearchParams<{ id: string; booklet?: string }>();
@@ -43,9 +44,9 @@ export default function SubjectScreen() {
       router.back();
     };
     if (Platform.OS === 'web') return doIt();
-    Alert.alert('Delete this booklet?', current.title, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: doIt },
+    Alert.alert(tt('Delete this booklet?'), current.title, [
+      { text: tt('Cancel'), style: 'cancel' },
+      { text: tt('Delete'), style: 'destructive', onPress: doIt },
     ]);
   };
 

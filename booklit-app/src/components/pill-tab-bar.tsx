@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, PanResponder, Platform, Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 
 import { Font } from '@/constants/theme';
+import { IS_AR, t as tt } from '@/i18n';
 import { useApp } from '@/store/app-store';
 
 const TABS: Record<string, { label: string; icon: LucideIcon }> = {
@@ -16,6 +17,12 @@ const TABS: Record<string, { label: string; icon: LucideIcon }> = {
 };
 
 const PAD = 6;
+
+/**
+ * The bar is always laid out left-to-right internally (so the sliding highlight maths is the same
+ * everywhere); in Arabic the tabs are placed in mirrored order, so Home sits on the right.
+ */
+const slot = (i: number, count: number) => (IS_AR ? count - 1 - i : i);
 
 /**
  * Floating dark pill navigation. The white highlight can be dragged across the bar:
@@ -45,13 +52,13 @@ export function PillTabBar({ state, navigateToTab, insets }: BottomTabBarProps) 
   // Follow navigation that happens elsewhere (e.g. "View all" links).
   useEffect(() => {
     live.current.index = state.index;
-    if (itemW) Animated.spring(x, { toValue: state.index * itemW, useNativeDriver: false, damping: 18, stiffness: 180 }).start();
+    if (itemW) Animated.spring(x, { toValue: slot(state.index, live.current.routes.length) * itemW, useNativeDriver: false, damping: 18, stiffness: 180 }).start();
   }, [state.index, itemW, x]);
 
   const go = (i: number) => {
     const r = live.current.routes[i];
     if (!r) return;
-    Animated.spring(x, { toValue: i * live.current.w, useNativeDriver: false, damping: 18, stiffness: 180 }).start();
+    Animated.spring(x, { toValue: slot(i, live.current.routes.length) * live.current.w, useNativeDriver: false, damping: 18, stiffness: 180 }).start();
     if (i !== live.current.index) {
       if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
       live.current.navigateToTab(r.key);
@@ -75,7 +82,7 @@ export function PillTabBar({ state, navigateToTab, insets }: BottomTabBarProps) 
       onPanResponderRelease: () => {
         Animated.spring(scale, { toValue: 1, useNativeDriver: false }).start();
         const w = live.current.w || 1;
-        go(Math.round(live.current.x / w));
+        go(slot(Math.round(live.current.x / w), live.current.routes.length));
       },
       onPanResponderTerminate: () => {
         Animated.spring(scale, { toValue: 1, useNativeDriver: false }).start();
@@ -87,7 +94,7 @@ export function PillTabBar({ state, navigateToTab, insets }: BottomTabBarProps) 
   const onLayout = (e: LayoutChangeEvent) => {
     const w = (e.nativeEvent.layout.width - PAD * 2) / count;
     live.current.w = w;
-    x.setValue(state.index * w);
+    x.setValue(slot(state.index, count) * w);
     setItemW(w);
   };
 
@@ -99,17 +106,19 @@ export function PillTabBar({ state, navigateToTab, insets }: BottomTabBarProps) 
       <View
         onLayout={onLayout}
         {...pan.panHandlers}
-        style={[styles.bar, { backgroundColor: p.navBar, shadowColor: '#17172B' }]}>
+        style={[styles.bar, { backgroundColor: p.navBar, shadowColor: '#17172B', direction: 'ltr' }]}>
         {itemW ? (
           <Animated.View
             pointerEvents="none"
             style={[styles.indicator, { width: itemW, transform: [{ translateX: x }, { scale }] }]}
           />
         ) : null}
-        {routes.map((route, i) => {
+        {(IS_AR ? [...routes].reverse() : routes).map((route) => {
+          const i = routes.indexOf(route);
+          const v = slot(i, count);
           const tab = TABS[route.name];
           const on = itemW
-            ? x.interpolate({ inputRange: [(i - 1) * itemW, i * itemW, (i + 1) * itemW], outputRange: [0, 1, 0], extrapolate: 'clamp' })
+            ? x.interpolate({ inputRange: [(v - 1) * itemW, v * itemW, (v + 1) * itemW], outputRange: [0, 1, 0], extrapolate: 'clamp' })
             : new Animated.Value(i === state.index ? 1 : 0);
           const off = Animated.subtract(1, on);
           const Ico = tab.icon;
@@ -118,7 +127,7 @@ export function PillTabBar({ state, navigateToTab, insets }: BottomTabBarProps) 
               key={route.key}
               accessibilityRole="tab"
               accessibilityState={{ selected: state.index === i }}
-              accessibilityLabel={tab.label}
+              accessibilityLabel={tt(tab.label)}
               onPress={() => go(i)}
               style={styles.item}>
               <View>
@@ -131,10 +140,10 @@ export function PillTabBar({ state, navigateToTab, insets }: BottomTabBarProps) 
               </View>
               <View style={{ alignSelf: 'stretch' }}>
                 <Animated.Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} allowFontScaling={false} style={[styles.label, { color: inactive, opacity: off }]}>
-                  {tab.label}
+                  {tt(tab.label)}
                 </Animated.Text>
                 <Animated.Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} allowFontScaling={false} style={[styles.label, styles.labelActive, { color: activeFg, opacity: on }]}>
-                  {tab.label}
+                  {tt(tab.label)}
                 </Animated.Text>
               </View>
             </Pressable>

@@ -6,6 +6,8 @@ import {
   PlusJakartaSans_700Bold,
   useFonts,
 } from '@expo-google-fonts/plus-jakarta-sans';
+import { Alexandria_600SemiBold, Alexandria_700Bold } from '@expo-google-fonts/alexandria';
+import { IBMPlexSansArabic_300Light, IBMPlexSansArabic_400Regular, IBMPlexSansArabic_500Medium } from '@expo-google-fonts/ibm-plex-sans-arabic';
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import { Stack } from 'expo-router/stack';
 import * as SplashScreen from 'expo-splash-screen';
@@ -30,6 +32,12 @@ export default function RootLayout() {
     PlusJakartaSans_500Medium,
     PlusJakartaSans_600SemiBold,
     PlusJakartaSans_700Bold,
+    // Arabic
+    IBMPlexSansArabic_300Light,
+    IBMPlexSansArabic_400Regular,
+    IBMPlexSansArabic_500Medium,
+    Alexandria_600SemiBold,
+    Alexandria_700Bold,
   });
   return (
     <AppStoreProvider>

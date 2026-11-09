@@ -8,6 +8,7 @@ import { Button, Card, EmptyState, Icon, ProgressBar, TopBar, Txt, withAlpha } f
 import { Brand, Font, Type } from '@/constants/theme';
 import { getTopic, mcqsOf } from '@/data/content';
 import type { Mcq } from '@/data/types';
+import { IS_AR, t as tt } from '@/i18n';
 import { useApp } from '@/store/app-store';
 
 type Mode = 'ministry' | 'instructor' | 'quiz';
@@ -71,7 +72,7 @@ export default function Quiz() {
             <Txt weight="semibold" size={44} color={pct >= 0.6 ? Brand.success : Brand.danger} style={{ marginTop: 6, letterSpacing: -1 }}>
               {Math.round(pct * 100)}%
             </Txt>
-            <Txt weight="medium" size={Type.small}>{score} of {questions.length} correct</Txt>
+            <Txt weight="medium" size={Type.small}>{IS_AR ? `${score} من ${questions.length} صح` : `${score} of ${questions.length} correct`}</Txt>
           </Card>
           <Txt weight="semibold" size={Type.h2} style={{ marginTop: 24, marginBottom: 12 }}>Review answers</Txt>
           {questions.map((qq, k) => {
@@ -84,10 +85,10 @@ export default function Quiz() {
                 </View>
                 {!ok ? (
                   <Txt size={Type.small} color={Brand.danger} style={{ marginTop: 8, marginLeft: 28 }}>
-                    Your answer: {answers[k] !== null ? qq.options[answers[k]!] : 'Not answered'}
+                    {tt('Your answer:')} {answers[k] !== null ? qq.options[answers[k]!] : tt('Not answered')}
                   </Txt>
                 ) : null}
-                <Txt size={Type.small} color={Brand.success} style={{ marginTop: 4, marginLeft: 28 }}>Correct: {qq.options[qq.answerIndex]}</Txt>
+                <Txt size={Type.small} color={Brand.success} style={{ marginTop: 4, marginLeft: 28 }}>{tt('Correct:')} {qq.options[qq.answerIndex]}</Txt>
                 <Txt muted size={Type.small} style={{ marginTop: 6, marginLeft: 28, lineHeight: 19 }}>{qq.explanation}</Txt>
               </Card>
             );
@@ -142,7 +143,7 @@ export default function Quiz() {
         ) : null}
         {!practice ? (
           <Txt faint size={Type.tiny} style={{ textAlign: 'center', marginTop: 10, fontFamily: Font.regular }}>
-            {answeredCount}/{questions.length} answered · results appear when you submit
+            {IS_AR ? `أجبت ${answeredCount}/${questions.length} · النتيجة تظهر بعد التسليم` : `${answeredCount}/${questions.length} answered · results appear when you submit`}
           </Txt>
         ) : null}
       </ScrollView>

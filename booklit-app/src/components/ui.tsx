@@ -1,8 +1,9 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { ArrowLeft, ArrowUpRight, Lock, type LucideIcon } from 'lucide-react-native';
+import { ArrowLeft, ArrowRight, ArrowUpRight, ChevronLeft, ChevronRight, ChevronsRight, Lock, type LucideIcon } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import {
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -17,15 +18,33 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Font, Radius, TAB_BAR_SPACE, Type } from '@/constants/theme';
+import { IS_AR, t } from '@/i18n';
 import { subjectVisual } from '@/lib/subject-visuals';
 import { usePalette } from '@/store/app-store';
 
 export type { LucideIcon };
 
+/** Icons that point in the reading direction; they are mirrored in Arabic (RTL). */
+const DIRECTIONAL = new Set<LucideIcon>([ArrowLeft, ArrowRight, ArrowUpRight, ChevronLeft, ChevronRight, ChevronsRight]);
+export const flipStyle = IS_AR ? { transform: [{ scaleX: -1 }] } : undefined;
+export const isDirectional = (icon: LucideIcon) => DIRECTIONAL.has(icon);
+
 /** Thin line icon (Iconly-style): 1.6 stroke, rounded caps. */
 export function Icon({ as: As, size = 20, color, stroke = 1.6 }: { as: LucideIcon; size?: number; color?: string; stroke?: number }) {
   const p = usePalette();
-  return <As size={size} color={color ?? p.icon} strokeWidth={stroke} absoluteStrokeWidth />;
+  return <As size={size} color={color ?? p.icon} strokeWidth={stroke} absoluteStrokeWidth style={DIRECTIONAL.has(As) ? flipStyle : undefined} />;
+}
+
+/** Translate plain text children (strings, or strings mixed with numbers). */
+export function tr(children: ReactNode): ReactNode {
+  if (!IS_AR) return children;
+  if (typeof children === 'string') return t(children);
+  if (Array.isArray(children) && children.length && children.every((c) => typeof c === 'string' || typeof c === 'number')) {
+    const joined = children.join('');
+    const out = t(joined);
+    return out === joined ? children : out;
+  }
+  return children;
 }
 
 type Weight = keyof typeof Font;
@@ -42,8 +61,9 @@ export function Txt({
   return (
     <Text
       {...rest}
-      style={[{ fontFamily: Font[weight], fontSize: size, color: color ?? (faint ? p.textFaint : muted ? p.textMuted : p.text) }, style]}
-    />
+      style={[{ fontFamily: Font[weight], fontSize: size, color: color ?? (faint ? p.textFaint : muted ? p.textMuted : p.text) }, IS_AR && Platform.OS !== 'web' && { textAlign: 'left' }, style]}>
+      {tr(rest.children)}
+    </Text>
   );
 }
 
@@ -52,8 +72,8 @@ export function Heading({ light, strong, size = Type.display }: { light: string;
   const p = usePalette();
   return (
     <Text style={{ fontSize: size, lineHeight: size * 1.18, letterSpacing: -0.6 }}>
-      <Text style={{ fontFamily: Font.light, color: p.textMuted }}>{light} </Text>
-      <Text style={{ fontFamily: Font.semibold, color: p.text }}>{strong}</Text>
+      <Text style={{ fontFamily: Font.light, color: p.textMuted }}>{t(light)} </Text>
+      <Text style={{ fontFamily: Font.semibold, color: p.text }}>{t(strong)}</Text>
     </Text>
   );
 }
@@ -106,7 +126,7 @@ export function CircleButton({
   const fg = { surface: p.icon, ink: p.onInk, primary: '#fff', soft: p.primary, glass: '#17172B' }[variant];
   return (
     <Pressable
-      accessibilityLabel={label}
+      accessibilityLabel={t(label)}
       accessibilityRole="button"
       onPress={onPress}
       hitSlop={6}
@@ -231,6 +251,19 @@ export function ArrowCircle({ onPress, variant = 'surface', size = 36 }: { onPre
   return <CircleButton icon={ArrowUpRight} onPress={onPress} size={size} variant={variant} label="Open" />;
 }
 
+/** Header row for tab pages: back to Home, page name, optional right action. */
+export function TabHeader({ title, right }: { title: string; right?: ReactNode }) {
+  return (
+    <View style={styles.tabHeader}>
+      <CircleButton icon={ArrowLeft} label="Back" size={40} onPress={() => (router.canGoBack() ? router.back() : router.navigate('/'))} />
+      <Txt weight="semibold" size={Type.h2} style={{ flex: 1, textAlign: 'center' }} numberOfLines={1}>
+        {title}
+      </Txt>
+      <View style={{ width: 40, alignItems: 'flex-end' }}>{right}</View>
+    </View>
+  );
+}
+
 /** Top bar for inner screens: round back button, centred title, optional right slot. */
 export function TopBar({ title, right, onBack }: { title?: string; right?: ReactNode; onBack?: () => void }) {
   const insets = useSafeAreaInsets();
@@ -286,6 +319,7 @@ const styles = StyleSheet.create({
   button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 14, borderRadius: Radius.pill },
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   lock: { position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.92)', alignItems: 'center', justifyContent: 'center' },
+  tabHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 10 },
   emptyIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
 });
