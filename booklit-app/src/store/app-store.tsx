@@ -247,11 +247,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }
   }, [update]);
 
-  // Sync on start, when the app comes back to the foreground, and every minute while open.
+  // Sync on start, when the app comes back to the foreground, and every 3 minutes while open.
   useEffect(() => {
     if (!ready) return;
     void sync();
-    const iv = setInterval(() => void sync(), 60_000);
+    const iv = setInterval(() => void sync(), 180_000);
     const sub = AppState.addEventListener('change', (st) => st === 'active' && void sync());
     return () => {
       clearInterval(iv);

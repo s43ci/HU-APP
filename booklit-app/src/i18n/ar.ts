@@ -556,7 +556,7 @@ export const AR: Record<string, string> = {
   'Prices & discounts': 'الأسعار والخصومات',
   'Pro plan': 'اشتراك Pro',
   'Premium plan': 'اشتراك Premium',
-  'Publish so every student sees it within a minute.': 'انشرها ليراها جميع الطلاب خلال دقيقة.',
+  'Publish so every student sees it within a few minutes.': 'انشرها ليراها جميع الطلاب خلال دقائق.',
   'Publish to all students': 'النشر لجميع الطلاب',
   'Publishing…': 'جارٍ النشر…',
   'Reason (optional, the student sees it)': 'السبب (اختياري، يظهر للطالب)',
@@ -583,7 +583,7 @@ export const AR: Record<string, string> = {
   'Students': 'الطلاب',
   'Students activate it themselves, no approval needed.': 'يفعّله الطلاب بأنفسهم دون الحاجة إلى موافقة.',
   'Students appear here as soon as they create an account.': 'يظهر الطلاب هنا فور إنشاء حساباتهم.',
-  'Students get every update within a minute.': 'يصل كل تحديث إلى الطلاب خلال دقيقة.',
+  'Students get every update within a few minutes.': 'يصل كل تحديث إلى الطلاب خلال دقائق.',
   'Students will no longer see it. Your copy stays in Studio.': 'لن تظهر للطلاب بعد الآن، وتبقى نسختك في الاستوديو.',
   'Students, requests, prices and staff': 'الطلاب والطلبات والأسعار والمشرفون',
   'Subscription': 'الاشتراك',
@@ -645,6 +645,9 @@ export const AR: Record<string, string> = {
   'Give your team their own sign-in and choose exactly what each one can do. Only you (the admin) can add or remove moderators.': 'امنح فريقك حسابات دخول خاصة وحدد بدقة ما يستطيع كل منهم فعله. أنت وحدك (المدير) من يضيف المشرفين أو يزيلهم.',
   'Send these sign-in details to the moderator. They can change the password from their profile.': 'أرسل بيانات الدخول هذه إلى المشرف، ويمكنه تغيير كلمة المرور من حسابه.',
   'Subscription & plan': 'الاشتراك',
+  'Drag over a highlight to erase it.': 'اسحب فوق التظليل لمسحه.',
+  'Press on the text and drag to highlight. Highlights are saved automatically.': 'اضغط على النص واسحب إصبعك للتظليل، ويُحفظ التظليل تلقائياً.',
+  'Tap another word to select up to it · or use the highlighter pen to drag': 'اضغط على كلمة أخرى لتحديد ما بينهما · أو استخدم قلم التظليل للسحب',
 };
 
 /** Templates for strings that contain numbers. */

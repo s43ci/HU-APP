@@ -59,7 +59,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DrawingLayer, type DrawTool } from '@/components/reader/drawing-layer';
-import { MarkedText, tokenize, wordsOf, type Selection } from '@/components/reader/marked-text';
+import { MarkedText, tokenize, wordsOf, type Paint, type Selection } from '@/components/reader/marked-text';
 import { ReaderTable } from '@/components/reader-table';
 import { StoredImage } from '@/components/stored-image';
 import { flipStyle, isDirectional, Txt, withAlpha } from '@/components/ui';
@@ -110,6 +110,7 @@ export default function Reader() {
   const [viewer, setViewer] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [lastColor, setLastColor] = useState<HighlightColor>('yellow');
+  const [erasing, setErasing] = useState(false);
   const [translation, setTranslation] = useState<{ source: string; text: string; loading: boolean; error?: boolean } | null>(null);
 
   const restoreOffset = app.lastRead?.topicId === topicId ? app.lastRead.offset : 0;
@@ -278,6 +279,49 @@ export default function Reader() {
     else app.removeMark(topic.id, selMark.id);
     setSelMarkId(null);
   };
+  /** Remove highlighting from words a..b of one paragraph (highlights are trimmed or split). */
+  const eraseRange = (block: number, item: number | undefined, a: number, b: number, keepColor?: HighlightColor) => {
+    marks
+      .filter((m) => m.block === block && (m.item ?? -1) === (item ?? -1) && m.start <= b && m.end >= a && m.color !== keepColor)
+      .forEach((m) => {
+        if (m.id.startsWith('legacy-')) return app.toggleHighlight(topic.id, block);
+        const left = m.start < a;
+        const right = m.end > b;
+        if (!left && !right) app.removeMark(topic.id, m.id);
+        else if (left && right) {
+          app.updateMark(topic.id, m.id, { end: a - 1, text: wordsOf(textOf(block, item), m.start, a - 1) });
+          app.addMark(topic.id, { id: newMarkId(), block, item, start: b + 1, end: m.end, color: m.color, text: wordsOf(textOf(block, item), b + 1, m.end), createdAt: clock() });
+        } else if (left) app.updateMark(topic.id, m.id, { end: a - 1, text: wordsOf(textOf(block, item), m.start, a - 1) });
+        else app.updateMark(topic.id, m.id, { start: b + 1, text: wordsOf(textOf(block, item), b + 1, m.end) });
+      });
+  };
+
+  /** Highlighter pen stroke over words a..b: joins touching highlights of the same colour, replaces other colours. */
+  const paintRange = (block: number, item: number | undefined, a: number, b: number) => {
+    let lo = a;
+    let hi = b;
+    let note: string | undefined;
+    const same = marks.filter((m) => !m.id.startsWith('legacy-') && m.block === block && (m.item ?? -1) === (item ?? -1) && m.color === lastColor && m.start <= b + 1 && m.end >= a - 1);
+    same.forEach((m) => {
+      lo = Math.min(lo, m.start);
+      hi = Math.max(hi, m.end);
+      note ??= m.note;
+      app.removeMark(topic.id, m.id);
+    });
+    eraseRange(block, item, lo, hi, lastColor);
+    app.addMark(topic.id, { id: newMarkId(), block, item, start: lo, end: hi, color: lastColor, note, text: wordsOf(textOf(block, item), lo, hi), createdAt: clock() });
+  };
+
+  const paintFor = (block: number, item: number | undefined): Paint | null =>
+    mode === 'highlight' && !selMark
+      ? {
+          color: HIGHLIGHT_COLORS[lastColor],
+          erase: erasing,
+          onPaint: (a, b) => paintRange(block, item, a, b),
+          onErase: (a, b) => eraseRange(block, item, a, b),
+        }
+      : null;
+
   const saveNote = (text: string) => {
     const note = text.trim();
     if (selMark && !selMark.id.startsWith('legacy-')) app.updateMark(topic.id, selMark.id, { note: note || undefined });
@@ -418,9 +462,9 @@ export default function Reader() {
             <Text style={[styles.meta, { color: rt.muted }]}>{tt(`${topic.minutes} min read`)}{marks.length ? ` · ${tt(`${marks.length} highlights`)}` : ''}</Text>
 
             {mode === 'highlight' && !sel && !selMark ? (
-              <View style={[styles.hint, { backgroundColor: withAlpha(HIGHLIGHT_COLORS.yellow, 0.22) }]}>
+              <View style={[styles.hint, { backgroundColor: withAlpha(erasing ? '#E5484D' : HIGHLIGHT_COLORS[lastColor], 0.22) }]}>
                 <Highlighter size={16} color={rt.text} strokeWidth={1.6} />
-                <Text style={[styles.hintText, { color: rt.text }]}>{tt('Tap the first word, then the last word. Tap a word twice for the whole sentence.')}</Text>
+                <Text style={[styles.hintText, { color: rt.text }]}>{tt(erasing ? 'Drag over a highlight to erase it.' : 'Press on the text and drag to highlight. Highlights are saved automatically.')}</Text>
               </View>
             ) : null}
 
@@ -445,7 +489,8 @@ export default function Reader() {
                     marks={marks}
                     sel={sel}
                     selMarkId={selMarkId}
-                    tapToSelect={mode === 'highlight' || !!sel}
+                    tapToSelect={!!sel}
+                    paintFor={paintFor}
                     onWord={onWord}
                     onMark={onMark}
                     onOpenImage={setViewer}
@@ -501,7 +546,7 @@ export default function Reader() {
               {selMark ? <SelBtn icon={Trash2} label="Remove" onPress={removeSelMark} /> : null}
               <SelBtn icon={X} label="Close" onPress={() => { setSel(null); setSelMarkId(null); }} />
             </View>
-            {sel ? <Text style={styles.selHint}>{tt('Tap the last word to highlight · tap this word again for the whole sentence')}</Text> : selMark?.note ? <Text numberOfLines={2} style={styles.selHint}>✎ {selMark.note}</Text> : null}
+            {sel ? <Text style={styles.selHint}>{tt('Tap another word to select up to it · or use the highlighter pen to drag')}</Text> : selMark?.note ? <Text numberOfLines={2} style={styles.selHint}>✎ {selMark.note}</Text> : null}
           </View>
         ) : null}
 
@@ -509,7 +554,22 @@ export default function Reader() {
         <Animated.View
           pointerEvents={chromeOn || busy ? 'auto' : 'none'}
           style={[styles.bottom, { paddingBottom: Math.max(insets.bottom, 10), backgroundColor: rt.chrome, borderTopColor: rt.border, opacity: busy ? 1 : chrome, transform: [{ translateY: busy ? 0 : slideDown }] }]}>
-          {mode === 'draw' ? (
+          {mode === 'highlight' ? (
+            <View style={styles.drawRow}>
+              {(Object.keys(HIGHLIGHT_COLORS) as HighlightColor[]).map((c) => {
+                const on = !erasing && lastColor === c;
+                return (
+                  <Pressable key={c} onPress={() => { setLastColor(c); setErasing(false); }} style={[styles.penDot, { borderColor: on ? p.primary : 'transparent' }]} accessibilityLabel={`Highlight ${c}`}>
+                    <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: HIGHLIGHT_COLORS[c] }} />
+                  </Pressable>
+                );
+              })}
+              <Mini icon={Eraser} label="Eraser" active={erasing} onPress={() => setErasing(!erasing)} color={rt.text} accent={p.primary} />
+              <Pressable onPress={() => { setMode2('highlight'); setErasing(false); }} style={[styles.done, { backgroundColor: p.primary }]}>
+                <Text style={styles.doneText}>{tt('Done')}</Text>
+              </Pressable>
+            </View>
+          ) : mode === 'draw' ? (
             <View style={styles.drawRow}>
               {PEN_COLORS.map((c) => {
                 const on = tool.kind === 'pen' && tool.color === c;
@@ -534,7 +594,7 @@ export default function Reader() {
                 {!tablet ? <Mini icon={List} label="Contents" onPress={() => setSheet('toc')} color={rt.text} /> : null}
                 <Mini icon={Search} label="Search" onPress={() => { setSearchOpen(true); showChrome(true); }} color={rt.text} />
                 <Mini icon={ALargeSmall} label="Reading settings" onPress={() => setSheet('settings')} color={rt.text} />
-                <Mini icon={Highlighter} label="Highlight" active={mode === 'highlight'} onPress={() => setMode2('highlight')} color={rt.text} accent={p.primary} />
+                <Mini icon={Highlighter} label="Highlight" onPress={() => setMode2('highlight')} color={rt.text} accent={p.primary} />
                 <Mini icon={PenLine} label="Draw" onPress={() => setMode2('draw')} color={rt.text} accent={p.primary} />
                 <Mini icon={NotebookPen} label="Notes & highlights" onPress={() => setSheet('notes')} color={rt.text} badge={notesCount} accent={p.primary} />
                 <Mini icon={ChevronRight} label="Next topic" disabled={!next} onPress={() => next && goTopic(next.id)} color={rt.text} />
@@ -768,9 +828,10 @@ type BlockProps = {
   onWord: (block: number, item: number | undefined, w: number, long: boolean) => void;
   onMark: (m: Mark) => void;
   onOpenImage: (uri: string) => void;
+  paintFor: (block: number, item: number | undefined) => Paint | null;
 };
 
-function Block({ block: b, index, body, family, fs, theme, accent, title, marks, sel, selMarkId, tapToSelect, onWord, onMark, onOpenImage }: BlockProps) {
+function Block({ block: b, index, body, family, fs, theme, accent, title, marks, sel, selMarkId, tapToSelect, onWord, onMark, onOpenImage, paintFor }: BlockProps) {
   const rt = ReaderThemes[theme];
   const dir = (s: string) => (isRtl(s) ? ({ writingDirection: 'rtl', textAlign: 'right' } as const) : null);
   const text = (t: string, style: TextStyle | (TextStyle | null)[], item?: number) => (
@@ -787,6 +848,7 @@ function Block({ block: b, index, body, family, fs, theme, accent, title, marks,
       tapToSelect={tapToSelect}
       onWord={(w, long) => onWord(index, item, w, long)}
       onMark={onMark}
+      paint={paintFor(index, item)}
     />
   );
   switch (b.type) {

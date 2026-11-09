@@ -155,7 +155,7 @@ function Tile({ icon, label, onPress, active }: { icon: Parameters<typeof Icon>[
       <View style={[styles.tileIcon, { backgroundColor: active ? p.surface : p.primarySoft }]}>
         <Icon as={icon} size={19} color={p.primary} />
       </View>
-      <Txt weight="medium" size={Type.small}>{label}</Txt>
+      <Txt weight="medium" size={Type.small} style={{ textAlign: 'center', alignSelf: 'stretch' }}>{label}</Txt>
     </Pressable>
   );
 }
@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
   heroProgress: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16 },
   heroBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#fff', borderRadius: 999, paddingVertical: 11, marginTop: 16 },
   tiles: { flexDirection: 'row', gap: 10, marginTop: 16, marginBottom: 24 },
-  tile: { flex: 1, alignItems: 'center', gap: 10, paddingVertical: 16, borderRadius: 20 },
+  tile: { flex: 1, alignItems: 'center', gap: 10, paddingVertical: 16, paddingHorizontal: 8, borderRadius: 20 },
   tileIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 20 },
 });

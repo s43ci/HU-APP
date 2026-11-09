@@ -1,4 +1,5 @@
-import { Text, type StyleProp, type TextStyle } from 'react-native';
+import { useRef, useState, type ComponentRef } from 'react';
+import { Platform, StyleSheet, Text, View, type GestureResponderEvent, type StyleProp, type TextStyle } from 'react-native';
 
 import { HIGHLIGHT_COLORS, type Mark } from '@/data/annotations';
 import { withAlpha } from '../ui';
@@ -33,13 +34,27 @@ type Props = {
   tapToSelect: boolean;
   onWord: (word: number, long: boolean) => void;
   onMark: (mark: Mark) => void;
+  /** Highlighter pen is on: press and drag across words to highlight (or erase). */
+  paint?: Paint | null;
+};
+
+export type Paint = {
+  color: string;
+  erase: boolean;
+  onPaint: (a: number, b: number) => void;
+  onErase: (a: number, b: number) => void;
 };
 
 /**
  * Paragraph text where every word can be selected, so highlights and notes cover exactly
  * the chosen phrase (not the whole block). Long-press a word to start; tap another to extend.
  */
-export function MarkedText({ text, block, item, marks, selection, selectedMarkId, accent, dark, style, tapToSelect, onWord, onMark }: Props) {
+export function MarkedText(props: Props) {
+  if (props.paint) return <PaintFlow {...props} paint={props.paint} />;
+  return <PlainMarked {...props} />;
+}
+
+function PlainMarked({ text, block, item, marks, selection, selectedMarkId, accent, dark, style, tapToSelect, onWord, onMark }: Props) {
   const tokens = tokenize(text);
   const mine = marks.filter((m) => m.block === block && (m.item ?? -1) === (item ?? -1));
   const markAt = (w: number) => {
@@ -80,3 +95,137 @@ export function MarkedText({ text, block, item, marks, selection, selectedMarkId
     </Text>
   );
 }
+
+type Rect = { x: number; y: number; w: number; h: number };
+
+const LAYOUT_KEYS = ['margin', 'marginTop', 'marginBottom', 'marginLeft', 'marginRight', 'marginStart', 'marginEnd', 'marginVertical', 'marginHorizontal'] as const;
+
+/**
+ * Highlighter pen: the paragraph is laid out word by word so the finger position maps to a word.
+ * Press on the text and drag: the words under the finger are highlighted live, and saved on release.
+ * With the eraser on, dragging removes highlights instead. Dragging outside the text still scrolls.
+ */
+function PaintFlow({ text, block, item, marks, dark, style, onMark, paint }: Props & { paint: Paint }) {
+  const tokens = tokenize(text).filter((t) => t.w >= 0);
+  const mine = marks.filter((m) => m.block === block && (m.item ?? -1) === (item ?? -1));
+  const markAt = (w: number) => {
+    for (let i = mine.length - 1; i >= 0; i--) if (w >= mine[i].start && w <= mine[i].end) return mine[i];
+    return undefined;
+  };
+  const [drag, setDrag] = useState<{ a: number; b: number } | null>(null);
+  const box = useRef<ComponentRef<typeof View>>(null);
+  const g = useRef({ rects: [] as Rect[], ox: 0, oy: 0, ready: false, a: -1, b: -1, sx: 0, sy: 0, moved: false });
+
+  const flat = StyleSheet.flatten(style) ?? {};
+  const outer: Record<string, unknown> = {};
+  const inner: Record<string, unknown> = {};
+  Object.entries(flat).forEach(([k, v]) => ((LAYOUT_KEYS as readonly string[]).includes(k) ? (outer[k] = v) : k === 'textAlign' || k === 'writingDirection' ? null : (inner[k] = v)));
+  const rtl = /[\u0590-\u08FF]/.test(text.slice(0, 60));
+  const alpha = dark ? 0.35 : 0.5;
+  const space = Math.round(((flat.fontSize as number | undefined) ?? 16) * 0.28);
+
+  const hit = (px: number, py: number) => {
+    const r = g.current.rects;
+    let best = -1;
+    let bestD = Infinity;
+    for (let i = 0; i < r.length; i++) {
+      const q = r[i];
+      if (!q) continue;
+      const dy = py < q.y ? q.y - py : py > q.y + q.h ? py - (q.y + q.h) : 0;
+      const dx = px < q.x ? q.x - px : px > q.x + q.w ? px - (q.x + q.w) : 0;
+      const d = dy * 4 + dx; // same line first, then nearest along the line
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    return best;
+  };
+
+  const at = (e: GestureResponderEvent) => hit(e.nativeEvent.pageX - g.current.ox, e.nativeEvent.pageY - g.current.oy);
+
+  const grant = (e: GestureResponderEvent) => {
+    const st = g.current;
+    st.ready = false;
+    st.moved = false;
+    st.sx = e.nativeEvent.pageX;
+    st.sy = e.nativeEvent.pageY;
+    const { pageX, pageY } = e.nativeEvent;
+    box.current?.measureInWindow((x, y) => {
+      st.ox = x;
+      st.oy = y;
+      st.ready = true;
+      const w = hit(pageX - x, pageY - y);
+      st.a = w;
+      st.b = w;
+    });
+  };
+  const move = (e: GestureResponderEvent) => {
+    const st = g.current;
+    if (!st.ready || st.a < 0) return;
+    if (Math.abs(e.nativeEvent.pageX - st.sx) + Math.abs(e.nativeEvent.pageY - st.sy) > 6) st.moved = true;
+    const w = at(e);
+    if (w >= 0 && w !== st.b) {
+      st.b = w;
+      setDrag({ a: st.a, b: w });
+    } else if (st.moved && !drag) setDrag({ a: st.a, b: st.b });
+  };
+  const release = () => {
+    const st = g.current;
+    const a = Math.min(st.a, st.b);
+    const b = Math.max(st.a, st.b);
+    setDrag(null);
+    if (a < 0) return;
+    if (!st.moved) {
+      // A tap on a highlight opens it (colour, note, remove); a tap on plain text highlights that word.
+      const m = markAt(a);
+      if (m && !paint.erase) return onMark(m);
+    }
+    if (paint.erase) paint.onErase(a, b);
+    else paint.onPaint(a, b);
+  };
+
+  const lo = drag ? Math.min(drag.a, drag.b) : -1;
+  const hi = drag ? Math.max(drag.a, drag.b) : -1;
+  const bgOf = (w: number) => {
+    if (drag && w >= lo && w <= hi) return paint.erase ? 'rgba(229,72,77,0.18)' : withAlpha(paint.color, alpha + 0.1);
+    const m = markAt(w);
+    return m ? withAlpha(HIGHLIGHT_COLORS[m.color], alpha) : undefined;
+  };
+
+  return (
+    <View
+      ref={box}
+      style={[outer, styles.flow, { direction: rtl ? 'rtl' : 'ltr' }, Platform.OS === 'web' ? ({ touchAction: 'none', cursor: 'text' } as object) : null]}
+      onStartShouldSetResponder={() => true}
+      onMoveShouldSetResponder={() => true}
+      onResponderTerminationRequest={() => false}
+      onResponderGrant={grant}
+      onResponderMove={move}
+      onResponderRelease={release}
+      onResponderTerminate={() => setDrag(null)}>
+      {tokens.map((tk, i) => {
+        const bg = bgOf(tk.w);
+        const nextBg = i < tokens.length - 1 ? bgOf(tokens[i + 1].w) : undefined;
+        const last = i === tokens.length - 1;
+        // The gap after a word is part of the highlight only when the next word shares it, so a phrase reads as one band.
+        const joined = !!bg && bg === nextBg;
+        return (
+          <View
+            key={i}
+            onLayout={(e) => {
+              const l = e.nativeEvent.layout;
+              g.current.rects[tk.w] = { x: l.x, y: l.y, w: l.width, h: l.height };
+            }}
+            style={[{ backgroundColor: bg, borderRadius: 3 }, last ? null : joined ? { paddingEnd: space, borderTopEndRadius: 0, borderBottomEndRadius: 0 } : { marginEnd: space }, i > 0 && bg && bgOf(tokens[i - 1].w) === bg ? { borderTopStartRadius: 0, borderBottomStartRadius: 0 } : null]}>
+            <Text style={inner}>{tk.t}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  flow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start' },
+});

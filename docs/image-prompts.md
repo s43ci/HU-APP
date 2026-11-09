@@ -9,7 +9,7 @@
 3. خلّ المقاس **مربع 1:1** (1024×1024 أو أكبر).
 4. دزلي الصورة واكتب اسم المادة. أنا أسميها وأضيفها للتطبيق مباشرة.
 
-> كل الصور (1–14 و `uploads.jpg`) مضافة للتطبيق.
+> كل الصور (1–14 و `uploads.jpg`) مضافة للتطبيق. صور المرحلة الثالثة (15–17) بانتظار التوليد.
 
 > إذا طلعت صورة بيها كتابة أو لون غريب، اطلب من Gemini: «نفس الصورة بدون أي نص، والخلفية لافندر فاتح».
 
@@ -123,6 +123,33 @@ A small mixing bowl with a violet alginate impression material, a spatula restin
 ### 14. Physiology: `physiology.jpg`
 ```
 A stylized heart with a soft violet pulse line passing through it, and a small salivary gland shape with tiny droplets beside it.
+```
+
+---
+
+## مواد المرحلة الثالثة (جديدة)
+
+انسخ **الستايل الموحد** أولاً، ثم برومبت المادة في الرسالة نفسها.
+
+| # | المادة | المرحلة | اسم الملف |
+|---|--------|---------|-----------|
+| 15 | Oral Pathology | الثالثة | `oral-pathology.jpg` |
+| 16 | Pharmacology | الثالثة | `pharmacology.jpg` |
+| 17 | General Medicine | الثالثة | `general-medicine.jpg` |
+
+### 15. Oral Pathology: `oral-pathology.jpg`
+```
+A section of a mandible cut open to show a single molar root with a small round translucent violet cyst at the root apex, and a circular magnified lens above it showing soft violet tissue cells.
+```
+
+### 16. Pharmacology: `pharmacology.jpg`
+```
+A dental local anaesthetic cartridge lying next to two smooth capsules and a small round tablet, one capsule half violet and half ivory, arranged neatly with soft shadows.
+```
+
+### 17. General Medicine: `general-medicine.jpg`
+```
+A stethoscope coiled in a soft loop, its chest piece resting beside a small stylized heart with a thin violet pulse line, and a small round blood-pressure gauge dial with a violet needle beside it.
 ```
 
 ---

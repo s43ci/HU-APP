@@ -83,7 +83,7 @@ export function PublishCard({ booklet }: { booklet: ImportedBooklet }) {
             {status === 'published' ? 'Live for every student' : status === 'changed' ? 'You have unpublished changes' : 'Not published yet'}
           </Txt>
           <Txt size={Type.tiny} color={status === 'published' ? p.textMuted : 'rgba(255,255,255,0.7)'}>
-            {status === 'published' ? 'Students get every update within a minute.' : 'Publish so every student sees it within a minute.'}
+            {status === 'published' ? 'Students get every update within a few minutes.' : 'Publish so every student sees it within a few minutes.'}
           </Txt>
         </View>
       </View>
