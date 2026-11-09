@@ -1,19 +1,20 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { BookOpen, Check, Crown, LogOut, Monitor, Moon, PenLine, RotateCcw, Send, ShieldCheck, Sun, Wand2 } from 'lucide-react-native';
-import { useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { Check, KeyRound, Monitor, Moon, RotateCcw, Send, Sun } from 'lucide-react-native';
+import { useEffect, useState } from 'react';
+import { Linking, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 
 import { Field } from '@/components/field';
 import { Button, Card, Chip, EmptyState, Icon, SubjectThumb, TopBar, Txt } from '@/components/ui';
-import { ADMIN_CODE, Font, TELEGRAM_URL, Type } from '@/constants/theme';
-import type { Role } from '@/data/annotations';
+import { TELEGRAM_URL, Type } from '@/constants/theme';
+import { Plans } from '@/components/plans';
+import { api, type Account as AccountT, type Session } from '@/lib/api';
 import { getBooklet, getSubject, getTopic, stages } from '@/data/content';
 import type { StageId } from '@/data/types';
 import { useApp, type Appearance } from '@/store/app-store';
 import { setLanguage, t as tt } from '@/i18n';
 
 const TITLES: Record<string, string> = {
-  account: 'Account & plan',
+  account: 'Subscription',
   'edit-profile': 'Edit profile',
   password: 'Change password',
   notifications: 'Notifications',
@@ -34,14 +35,7 @@ export default function Settings() {
       <ScrollView contentContainerStyle={{ padding: 20, gap: 12, paddingBottom: 40 }}>
         {key === 'account' ? <Account /> : null}
         {key === 'edit-profile' ? <EditProfile /> : null}
-        {key === 'password' ? (
-          <Card style={{ padding: 18, gap: 6 }}>
-            <Txt weight="semibold">Account security</Txt>
-            <Txt muted size={Type.small} style={{ lineHeight: 20 }}>
-              Password changes arrive with BOOKLIT accounts on the server. Until then your data stays on this device only.
-            </Txt>
-          </Card>
-        ) : null}
+        {key === 'password' ? <Password /> : null}
         {key === 'notifications' ? (
           <Card style={styles.toggleRow}>
             <View style={{ flex: 1 }}>
@@ -121,114 +115,86 @@ export default function Settings() {
   );
 }
 
-const PLANS: { role: Exclude<Role, 'admin'>; title: string; text: string; icon: typeof Crown }[] = [
-  { role: 'pro', title: 'Pro', text: 'Read every booklet, MCQs, quizzes, Ask AI, highlights, notes and drawing.', icon: BookOpen },
-  { role: 'premium', title: 'Premium', text: 'Everything in Pro, plus editing the design of booklets.', icon: PenLine },
-];
-
 function Account() {
   const app = useApp();
-  const p = app.palette;
-  const [code, setCode] = useState('');
-  const [wrong, setWrong] = useState(false);
-  const isAdmin = app.role === 'admin';
-
-  return (
-    <View style={{ gap: 12 }}>
-      <Card style={{ padding: 16, gap: 4 }}>
-        <Txt faint size={Type.tiny}>Current plan</Txt>
-        <Txt weight="semibold" size={Type.title}>{isAdmin ? 'Admin' : app.role === 'premium' ? 'Premium' : 'Pro'}</Txt>
-        <Txt muted size={Type.tiny} style={{ lineHeight: 17 }}>
-          {isAdmin ? 'You can upload, design and publish booklets in BOOKLIT Studio.' : 'Plans are activated by the BOOKLIT team after payment.'}
-        </Txt>
-      </Card>
-
-      {!isAdmin ? (
-        <>
-          <Txt weight="semibold" style={{ marginTop: 6 }}>Plans</Txt>
-          {PLANS.map((pl) => {
-            const on = app.role === pl.role;
-            return (
-              <Pressable key={pl.role} onPress={() => app.set({ role: pl.role })} style={[styles.plan, { backgroundColor: p.surface, borderColor: on ? p.primary : 'transparent' }]}>
-                <View style={[styles.planIcon, { backgroundColor: on ? p.primary : p.primarySoft }]}>
-                  <Icon as={pl.icon} size={18} color={on ? '#fff' : p.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Txt weight="semibold">{pl.title}</Txt>
-                  <Txt muted size={Type.tiny} style={{ lineHeight: 17 }}>{pl.text}</Txt>
-                </View>
-                {on ? <Icon as={Check} size={18} color={p.primary} /> : null}
-              </Pressable>
-            );
-          })}
-          <Txt faint size={Type.tiny} style={{ lineHeight: 17 }}>
-            Switching plans here is for testing. When accounts move to the BOOKLIT server, your plan is set by the admin.
-          </Txt>
-        </>
-      ) : null}
-
-      <Txt weight="semibold" style={{ marginTop: 10 }}>BOOKLIT team</Txt>
-      {isAdmin ? (
-        <View style={{ gap: 8 }}>
-          <Button label="Open BOOKLIT Studio" icon={Wand2} variant="primary" onPress={() => router.push('/studio')} />
-          <Button label="Leave admin mode" icon={LogOut} variant="outline" onPress={() => app.set({ role: app.planBeforeAdmin })} />
-        </View>
-      ) : (
-        <Card style={{ padding: 14, gap: 10 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Icon as={ShieldCheck} size={18} color={p.primary} />
-            <Txt weight="medium" size={Type.small}>Admin access code</Txt>
-          </View>
-          <TextInput
-            value={code}
-            onChangeText={(t) => { setCode(t); setWrong(false); }}
-            secureTextEntry
-            placeholder={tt('Enter code')}
-            placeholderTextColor={p.textFaint}
-            style={[styles.code, { color: p.text, borderColor: wrong ? '#E5484D' : p.border, fontFamily: Font.regular }]}
-          />
-          {wrong ? <Txt size={Type.tiny} color="#E5484D">Wrong code.</Txt> : null}
-          <Button
-            label="Unlock Studio"
-            icon={Crown}
-            disabled={!code}
-            onPress={() => {
-              if (code.trim() === ADMIN_CODE) {
-                app.set({ planBeforeAdmin: app.role, role: 'admin' });
-                setCode('');
-              } else setWrong(true);
-            }}
-          />
-        </Card>
-      )}
-    </View>
-  );
+  // Fresh plan, prices and request status every time the page opens.
+  useEffect(() => {
+    void app.sync();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return <Plans />;
 }
 
 function EditProfile() {
   const app = useApp();
   const [name, setName] = useState(app.profile?.name ?? '');
-  const [email, setEmail] = useState(app.profile?.email ?? '');
   const [stageId, setStageId] = useState<StageId>(app.profile?.stageId ?? 'stage5');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   return (
     <View style={{ gap: 14 }}>
       <Field label="Full name" value={name} onChangeText={setName} autoCapitalize="words" />
-      <Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" />
-      <Txt weight="medium" size={Type.tiny} muted style={{ marginLeft: 4 }}>Stage</Txt>
+      <Field label="Email" value={app.profile?.email ?? ''} editable={false} style={{ opacity: 0.6 }} />
+      <Txt weight="medium" size={Type.tiny} muted style={{ marginStart: 4 }}>Stage</Txt>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {stages.map((s) => (
           <Chip key={s.id} label={s.name} active={stageId === s.id} onPress={() => setStageId(s.id)} />
         ))}
       </View>
+      {error ? <Txt size={Type.small} color="#E5484D">{error}</Txt> : null}
       <Button
-        label="Save"
+        label={busy ? 'Saving…' : 'Save'}
         icon={Check}
         variant="primary"
-        disabled={name.trim().length < 2}
+        disabled={name.trim().length < 2 || busy}
         style={{ marginTop: 8 }}
-        onPress={() => {
-          app.set({ profile: { name: name.trim(), email: email.trim(), stageId } });
-          router.back();
+        onPress={async () => {
+          setBusy(true);
+          setError('');
+          try {
+            const r = await api<{ account: AccountT }>('/api/me', { method: 'PATCH', body: { name: name.trim(), stageId } });
+            app.setAccount(r.account);
+            router.back();
+          } catch (e) {
+            setError((e as Error).message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
+    </View>
+  );
+}
+
+function Password() {
+  const app = useApp();
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  return (
+    <View style={{ gap: 14 }}>
+      <Field label="Current password" value={current} onChangeText={setCurrent} secureTextEntry autoComplete="current-password" />
+      <Field label="New password" value={next} onChangeText={setNext} secureTextEntry placeholder={tt('At least 8 characters')} autoComplete="new-password" />
+      {msg ? <Txt size={Type.small} color={msg.ok ? '#1F9D55' : '#E5484D'}>{msg.text}</Txt> : null}
+      <Button
+        label={busy ? 'Saving…' : 'Change password'}
+        icon={KeyRound}
+        variant="primary"
+        disabled={!current || next.length < 8 || busy}
+        onPress={async () => {
+          setBusy(true);
+          setMsg(null);
+          try {
+            const r = await api<{ account: AccountT; session: Session }>('/api/auth', { body: { action: 'password', current, next } });
+            app.setAccount(r.account, r.session);
+            setCurrent('');
+            setNext('');
+            setMsg({ ok: true, text: tt('Password changed.') });
+          } catch (e) {
+            setMsg({ ok: false, text: (e as Error).message });
+          } finally {
+            setBusy(false);
+          }
         }}
       />
     </View>
@@ -236,9 +202,6 @@ function EditProfile() {
 }
 
 const styles = StyleSheet.create({
-  plan: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 20, borderWidth: 1.5 },
-  planIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  code: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 11, fontSize: 15 },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
   option: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 15, paddingHorizontal: 10 },
   recent: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 20 },

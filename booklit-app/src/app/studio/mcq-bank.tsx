@@ -13,6 +13,8 @@ import { bookletsOf, getBooklet, isStudioBooklet, subjects, topicsOf } from '@/d
 import type { Mcq } from '@/data/types';
 import { newId } from '@/lib/editor';
 import { ACCEPTED_TYPES, importMcqBank, MAX_UPLOAD_MB, type BankQuestion } from '@/lib/import';
+import { publishBankMcqs, publishBooklet } from '@/lib/publish';
+import { logError } from '@/lib/log';
 import { useApp } from '@/store/app-store';
 
 type Item = BankQuestion & { key: string };
@@ -79,11 +81,20 @@ export default function McqBank() {
       answerIndex: q.answerIndex,
       explanation: q.explanation,
     }));
+    // Saved here, and published straight away so every student gets the questions.
     if (isStudioBooklet(bookletId)) {
-      const b = app.importedBooklets.find((x) => x.id === bookletId);
-      if (b) app.updateImported({ ...b, mcqs: [...b.mcqs, ...mcqs] });
+      const b = app.findBooklet(bookletId);
+      if (b) {
+        const next = { ...b, mcqs: [...b.mcqs, ...mcqs], updatedAt: Date.now() };
+        app.updateImported(next);
+        if (app.published.booklets.some((x) => x.id === b.id) || b.id in app.publishedMeta)
+          void publishBooklet(next, []).then((out) => app.markPublished(out)).catch((e) => logError('publish', e, { step: 'bank' }));
+      }
     } else {
       app.addExtraMcqs(mcqs);
+      const seen = new Set<string>();
+      const all = [...app.published.bankMcqs, ...app.extraMcqs, ...mcqs].filter((q) => (seen.has(q.id) ? false : (seen.add(q.id), true)));
+      void publishBankMcqs(all).then(() => app.sync()).catch((e) => logError('publish', e, { step: 'bank' }));
     }
     setSavedCount(mcqs.length);
     setPhase('saved');

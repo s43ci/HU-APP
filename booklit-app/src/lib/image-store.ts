@@ -94,3 +94,19 @@ export function useImageUri(uri: string | undefined): string | undefined {
   if (!uri.startsWith('idb:')) return uri;
   return cache.get(uri) ?? (loaded?.key === uri ? loaded.url : undefined);
 }
+
+/** Bytes + type of a stored image (for publishing it to the server). */
+export async function readImage(uri: string): Promise<{ bytes: Uint8Array; mime: string }> {
+  if (uri.startsWith('idb:')) {
+    const blob = await idb<Blob | undefined>('readonly', (s) => s.get(uri.slice(4)) as IDBRequest<Blob | undefined>);
+    if (!blob) throw new Error('Image not found on this device');
+    return { bytes: new Uint8Array(await blob.arrayBuffer()), mime: blob.type || 'image/png' };
+  }
+  if (Platform.OS === 'web' || uri.startsWith('blob:') || uri.startsWith('data:')) {
+    const blob = await (await fetch(uri)).blob();
+    return { bytes: new Uint8Array(await blob.arrayBuffer()), mime: blob.type || 'image/png' };
+  }
+  const f = new FsFile(uri);
+  const ext = uri.split('.').pop()?.toLowerCase();
+  return { bytes: await f.bytes(), mime: ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : 'image/png' };
+}

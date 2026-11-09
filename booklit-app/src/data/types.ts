@@ -57,6 +57,8 @@ export type ImportedBooklet = {
   fileName: string;
   language: string;
   createdAt: number;
+  /** Last local edit (used to show whether a Studio booklet has unpublished changes). */
+  updatedAt?: number;
   /** Subject the admin placed this booklet in (default: My Uploads). */
   subjectId?: string;
   topics: Topic[];

@@ -64,7 +64,7 @@ export default function TopicEditor() {
   const app = useApp();
   const p = app.palette;
   const insets = useSafeAreaInsets();
-  const booklet = app.importedBooklets.find((b) => b.topics.some((t) => t.id === topicId));
+  const booklet = [...app.importedBooklets, ...app.published.booklets].find((b) => b.topics.some((t) => t.id === topicId));
 
   const [draft, setDraft] = useState<Draft | null>(() =>
     booklet ? { topic: booklet.topics.find((t) => t.id === topicId)!, mcqs: booklet.mcqs.filter((q) => q.topicId === topicId) } : null,

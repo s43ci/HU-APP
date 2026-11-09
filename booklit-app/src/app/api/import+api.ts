@@ -6,13 +6,14 @@
  */
 import { fetchWithRetry, GeminiError } from '@/server/gemini';
 import { geminiPart, readUpload } from '@/server/upload';
+import { aiGate } from '@/server/supa';
 
 const MODEL = 'gemini-3.5-flash-lite';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-File-Name, X-File-Type, X-Options',
 };
 
 const PROMPT = `You convert study material into a structured digital booklet for dental students.
@@ -113,6 +114,8 @@ export function OPTIONS() {
 }
 
 export async function POST(request: Request) {
+  const denied = await aiGate(request, 'files');
+  if (denied) return denied;
   const key = process.env.GEMINI_API_KEY;
   if (!key) return json({ error: 'The conversion service is not configured.' }, 500);
 

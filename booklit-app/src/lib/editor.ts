@@ -8,13 +8,14 @@ import { API_BASE } from './ai';
 import { deleteImages, persistWebImage } from './image-store';
 import { log, logError } from './log';
 import { consume } from './usage';
+import { authHeader } from './api';
 
 export type AiAction = 'simplify' | 'fix' | 'translate' | 'bullets' | 'note' | 'expand';
 
 async function post<T>(path: string, body: unknown, area: string): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    res = await fetch(`${API_BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(await authHeader()) }, body: JSON.stringify(body) });
   } catch (e) {
     logError(area, e, { step: 'network' });
     throw new Error('Network problem. Check your internet connection.');

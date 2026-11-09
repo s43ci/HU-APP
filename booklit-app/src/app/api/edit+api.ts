@@ -1,5 +1,6 @@
 /** AI tools for the booklet editor: rewrite one block of text. */
 import { CORS, geminiJson, GeminiError, json } from '@/server/gemini';
+import { aiGate } from '@/server/supa';
 
 type Action = 'simplify' | 'fix' | 'translate' | 'bullets' | 'note' | 'expand';
 
@@ -23,6 +24,8 @@ export function OPTIONS() {
 }
 
 export async function POST(request: Request) {
+  const denied = await aiGate(request, 'user');
+  if (denied) return denied;
   let body: { action?: Action; text?: string; topic?: string };
   try {
     body = await request.json();

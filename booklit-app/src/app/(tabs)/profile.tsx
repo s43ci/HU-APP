@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import {
   Bell,
+  LayoutDashboard,
   FileUp,
   Bug,
   Crown,
@@ -41,9 +42,10 @@ export default function Profile() {
   const accuracy = app.quiz.answered ? Math.round((app.quiz.correct / app.quiz.answered) * 100) : 0;
   const open = (key: string) => router.push({ pathname: '/settings/[key]', params: { key } });
 
-  const ROLE_LABEL = { pro: 'Pro', premium: 'Premium', admin: 'Admin' } as const;
+  const planLabel = app.isAdmin ? 'Admin' : app.isStaff ? 'Moderator' : app.account?.plan === 'premium' ? 'Premium plan' : app.account?.plan === 'pro' ? 'Pro plan' : 'Free plan';
   const rows: { icon: LucideIcon; label: string; sub: string; onPress: () => void }[] = [
-    { icon: Crown, label: 'Account & plan', sub: `${ROLE_LABEL[app.role]} plan`, onPress: () => open('account') },
+    ...(app.isStaff ? [{ icon: LayoutDashboard, label: 'Admin dashboard', sub: 'Students, requests, prices and staff', onPress: () => router.push('/admin') }] : []),
+    { icon: Crown, label: app.isStaff ? 'Account' : 'Subscription', sub: planLabel, onPress: () => open('account') },
     ...(app.canUpload ? [{ icon: Wand2, label: 'BOOKLIT Studio', sub: 'Upload, design and question banks', onPress: () => router.push('/studio') }] : []),
     ...(app.canAddFiles && !app.canUpload ? [{ icon: FileUp, label: 'My files', sub: 'Turn your own PDFs into booklets', onPress: () => router.push('/import') }] : []),
     { icon: Pencil, label: 'Edit profile', sub: 'Name, email and stage', onPress: () => open('edit-profile') },

@@ -1,7 +1,9 @@
-import { Lock, Send } from 'lucide-react-native';
-import { Linking, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { router } from 'expo-router';
+import { Crown, Lock } from 'lucide-react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
-import { TELEGRAM_URL, Type } from '@/constants/theme';
+import { Type } from '@/constants/theme';
+import { IS_AR } from '@/i18n';
 import { usePalette } from '@/store/app-store';
 import { Button, Icon, Txt } from './ui';
 
@@ -15,17 +17,22 @@ export function LockedModal({ visible, onClose, subjectName }: { visible: boolea
             <Icon as={Lock} size={24} color={p.primary} />
           </View>
           <Txt weight="semibold" size={Type.h2} style={{ marginTop: 14, textAlign: 'center' }}>
-            {subjectName ?? 'This subject'} is locked
+            {IS_AR ? `${subjectName ?? 'هذه المادة'} مقفلة` : `${subjectName ?? 'This subject'} is locked`}
           </Txt>
           <Txt muted style={{ textAlign: 'center', marginTop: 8, lineHeight: 22 }}>
-            هذه المادة مقفلة ومتاحة للمشتركين فقط
-          </Txt>
-          <Txt faint size={Type.tiny} style={{ textAlign: 'center', marginTop: 4, lineHeight: 18 }}>
-            Your access is activated after your payment is confirmed.
+            Subscribe to Pro or Premium to open every subject.
           </Txt>
           <View style={{ alignSelf: 'stretch', gap: 8, marginTop: 20 }}>
-            <Button label="تواصل عبر تيليجرام" icon={Send} variant="primary" onPress={() => Linking.openURL(TELEGRAM_URL)} />
-            <Button label="إغلاق" variant="outline" onPress={onClose} />
+            <Button
+              label="See plans"
+              icon={Crown}
+              variant="primary"
+              onPress={() => {
+                onClose();
+                router.push({ pathname: '/settings/[key]', params: { key: 'account' } });
+              }}
+            />
+            <Button label="Close" variant="outline" onPress={onClose} />
           </View>
         </Pressable>
       </Pressable>

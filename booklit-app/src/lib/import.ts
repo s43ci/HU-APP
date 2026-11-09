@@ -8,6 +8,7 @@ import { saveImage } from './image-store';
 import { log, logError } from './log';
 import { extractPdfImages, type ExtractedImage } from './pdf-images';
 import { consume } from './usage';
+import { authHeader } from './api';
 
 export const ACCEPTED_TYPES = [
   'application/pdf',
@@ -60,6 +61,7 @@ export async function postFile<T>(path: string, asset: DocumentPickerAsset, opti
     throw new Error('Could not read the file from your device. Try choosing it again.');
   }
   const headers = {
+    ...(await authHeader()),
     'Content-Type': 'application/octet-stream',
     'X-File-Name': encodeURIComponent(asset.name),
     'X-File-Type': encodeURIComponent(asset.mimeType ?? ''),
@@ -77,7 +79,7 @@ export async function postFile<T>(path: string, asset: DocumentPickerAsset, opti
       const b64 = Platform.OS === 'web' ? '' : await new FsFile(asset.uri).base64();
       res = await fetch(`${API_BASE}${path}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
         body: JSON.stringify({ name: asset.name, mimeType: asset.mimeType ?? '', data: b64, options }),
         signal,
       });

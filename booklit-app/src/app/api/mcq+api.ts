@@ -1,5 +1,6 @@
 /** Generate practice MCQs for one topic (used by the booklet editor). */
 import { CORS, geminiJson, GeminiError, json } from '@/server/gemini';
+import { aiGate } from '@/server/supa';
 
 const SCHEMA = {
   type: 'OBJECT',
@@ -26,6 +27,8 @@ export function OPTIONS() {
 }
 
 export async function POST(request: Request) {
+  const denied = await aiGate(request, 'user');
+  if (denied) return denied;
   let body: { topic?: string; text?: string; count?: number; avoid?: string[] };
   try {
     body = await request.json();

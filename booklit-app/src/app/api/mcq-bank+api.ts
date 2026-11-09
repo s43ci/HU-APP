@@ -5,6 +5,7 @@
  */
 import { CORS, fetchWithRetry, GeminiError, GEMINI_MODEL, json } from '@/server/gemini';
 import { geminiPart, readUpload } from '@/server/upload';
+import { aiGate } from '@/server/supa';
 
 const SCHEMA = {
   type: 'OBJECT',
@@ -33,6 +34,8 @@ export function OPTIONS() {
 }
 
 export async function POST(request: Request) {
+  const denied = await aiGate(request, 'files');
+  if (denied) return denied;
   const key = process.env.GEMINI_API_KEY;
   if (!key) return json({ error: 'The AI service is not configured.' }, 500);
   const read = await readUpload(request);

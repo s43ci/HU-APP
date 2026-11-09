@@ -4,6 +4,7 @@
  * The key is the EAS secret env var GEMINI_API_KEY.
  */
 import { fetchWithRetry } from '@/server/gemini';
+import { aiGate } from '@/server/supa';
 
 const MODEL = 'gemini-3.5-flash-lite';
 
@@ -12,8 +13,8 @@ type Body = { subject?: string; booklet?: string; topic?: string; topicText?: st
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-File-Name, X-File-Type, X-Options',
 };
 
 const SYSTEM = `You are BOOKLIT's study assistant for dental students in Iraq.
@@ -29,6 +30,8 @@ export function OPTIONS() {
 }
 
 export async function POST(request: Request) {
+  const denied = await aiGate(request, 'user');
+  if (denied) return denied;
   const key = process.env.GEMINI_API_KEY;
   if (!key) return json({ error: 'AI service is not configured' }, 500);
 

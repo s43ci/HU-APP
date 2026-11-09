@@ -3,6 +3,7 @@ import type { Topic } from '@/data/types';
 
 import { log, logError } from './log';
 import { consume } from './usage';
+import { authHeader } from './api';
 
 export type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -17,7 +18,7 @@ export async function askAI(topic: Topic, history: ChatMessage[]): Promise<strin
   try {
     res = await fetch(`${API_BASE}/api/ask`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
     body: JSON.stringify({
       subject: subject.name,
       booklet: booklet.title,

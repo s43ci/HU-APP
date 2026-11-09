@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useColorScheme } from 'react-native';
+import { AppState, useColorScheme } from 'react-native';
 
 import { DarkPalette, LightPalette, type Palette, type ReaderTheme } from '@/constants/theme';
-import { setImportedContent } from '@/data/content';
+import { setImportedContent, subjects } from '@/data/content';
+import { api, getSession, onSessionChange, setSession, type Account, type PlanConfig, type Session, type SubRequest } from '@/lib/api';
 import { deleteBookletImages } from '@/lib/editor';
 import { DEFAULT_READER_PREFS, type Mark, type ReaderPrefs, type Role, type Stroke } from '@/data/annotations';
 import type { ImportedBooklet, Mcq, StageId } from '@/data/types';
@@ -46,7 +47,18 @@ type Persisted = {
   readerPrefs: ReaderPrefs;
   /** MCQs imported by the admin from question banks for course (built-in) topics. */
   extraMcqs: Mcq[];
+  /** Signed-in BOOKLIT account (server). */
+  session: Session | null;
+  account: Account | null;
+  plans: PlanConfig | null;
+  myRequest: SubRequest | null;
+  /** Booklets and question-bank MCQs the BOOKLIT team published for everyone (kept for offline reading). */
+  published: { updatedAt: number; booklets: ImportedBooklet[]; extraMcqs: Mcq[]; bankMcqs: Mcq[]; versions: Record<string, number> };
+  /** Studio booklet id -> its local updatedAt when last published. */
+  publishedMeta: Record<string, number>;
 };
+
+const EMPTY_PUBLISHED: Persisted['published'] = { updatedAt: 0, booklets: [], extraMcqs: [], bankMcqs: [], versions: {} };
 
 const DEFAULTS: Persisted = {
   profile: null,
@@ -74,6 +86,12 @@ const DEFAULTS: Persisted = {
   drawings: {},
   readerPrefs: DEFAULT_READER_PREFS,
   extraMcqs: [],
+  session: null,
+  account: null,
+  plans: null,
+  myRequest: null,
+  published: EMPTY_PUBLISHED,
+  publishedMeta: {},
 };
 
 const KEY = 'booklit.state.v1';
@@ -102,6 +120,19 @@ type Store = Persisted & {
   setDrawing: (topicId: string, strokes: Stroke[]) => void;
   setReaderPrefs: (patch: Partial<ReaderPrefs>) => void;
   addExtraMcqs: (list: Mcq[]) => void;
+  /** Staff (moderator) or admin: can open the admin dashboard. */
+  isStaff: boolean;
+  isAdmin: boolean;
+  can: (perm: Account['perms'][number]) => boolean;
+  /** Find a Studio / published booklet by id (local copy first). */
+  findBooklet: (id: string) => ImportedBooklet | undefined;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (p: { email: string; password: string; name: string; stageId: StageId }) => Promise<void>;
+  /** Re-read the account, plans and published content from the server. */
+  sync: () => Promise<void>;
+  setAccount: (a: Account, session?: Session) => void;
+  setMyRequest: (r: SubRequest | null) => void;
+  markPublished: (b: ImportedBooklet) => void;
   canEdit: boolean;
   canUpload: boolean;
   /** Premium and admin can turn their own files into booklets (personal library). */
@@ -137,7 +168,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     AsyncStorage.getItem(KEY)
       .then((raw) => {
-        if (raw) setState({ ...DEFAULTS, ...JSON.parse(raw) });
+        if (!raw) return;
+        const saved = { ...DEFAULTS, ...JSON.parse(raw) } as Persisted;
+        setSession(saved.session);
+        setState(saved);
       })
       .catch(() => {})
       .finally(() => setReady(true));
@@ -155,17 +189,135 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, ...fn(s) }));
   }, []);
 
+  // Token refreshes (or a suspended / expired account) flow back into the saved state.
+  useEffect(() => {
+    onSessionChange((session) => update(() => (session ? { session } : { session: null, account: null, myRequest: null })));
+  }, [update]);
+
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+  const syncing = useRef(false);
+
+  /** Account + plans + published content. Cheap when nothing changed (only the small index is read). */
+  const sync = useCallback(async () => {
+    if (syncing.current) return;
+    syncing.current = true;
+    try {
+      const cur = stateRef.current;
+      const [me, index] = await Promise.all([
+        getSession() ? api<{ account: Account; plans: PlanConfig; request: SubRequest | null }>('/api/me').catch(() => null) : Promise.resolve(null),
+        api<{ updatedAt: number; booklets: { id: string; updatedAt: number }[] }>('/api/content', { auth: false }).catch(() => null),
+      ]);
+      if (me) update(() => ({ account: me.account, plans: me.plans, myRequest: me.request }));
+      if (index && index.updatedAt !== cur.published.updatedAt) {
+        const old = cur.published;
+        const keep = new Map(old.booklets.map((b) => [b.id, b]));
+        const extras = new Map<string, Mcq[]>();
+        old.booklets.forEach((b) => extras.set(b.id, old.extraMcqs.filter((q) => q.topicId.startsWith(`${b.id}--`))));
+        const versions: Record<string, number> = {};
+        const booklets: ImportedBooklet[] = [];
+        for (const e of index.booklets) {
+          if (keep.has(e.id) && old.versions[e.id] === e.updatedAt) {
+            booklets.push(keep.get(e.id)!);
+            versions[e.id] = e.updatedAt;
+            continue;
+          }
+          const full = await api<{ booklet: ImportedBooklet; extraMcqs: Mcq[] }>(`/api/content?id=${encodeURIComponent(e.id)}`, { auth: false }).catch(() => null);
+          if (full) {
+            booklets.push(full.booklet);
+            extras.set(e.id, full.extraMcqs ?? []);
+            versions[e.id] = e.updatedAt;
+          } else if (keep.has(e.id)) booklets.push(keep.get(e.id)!);
+        }
+        const bank = await api<{ mcqs: Mcq[] }>('/api/content?mcqs=1', { auth: false }).catch(() => null);
+        update(() => ({
+          published: {
+            updatedAt: index.updatedAt,
+            booklets,
+            extraMcqs: booklets.flatMap((b) => extras.get(b.id) ?? []),
+            bankMcqs: bank?.mcqs ?? old.bankMcqs,
+            versions,
+          },
+        }));
+      }
+    } finally {
+      syncing.current = false;
+    }
+  }, [update]);
+
+  // Sync on start, when the app comes back to the foreground, and every minute while open.
+  useEffect(() => {
+    if (!ready) return;
+    void sync();
+    const iv = setInterval(() => void sync(), 60_000);
+    const sub = AppState.addEventListener('change', (st) => st === 'active' && void sync());
+    return () => {
+      clearInterval(iv);
+      sub.remove();
+    };
+  }, [ready, sync, state.session?.refresh]);
+
   // Keep the shared content arrays in sync with the student's uploads before children render.
+  const { allBooklets, allExtra } = useMemo(() => {
+    const localIds = new Set(state.importedBooklets.map((b) => b.id));
+    const pub = state.published.booklets.filter((b) => !localIds.has(b.id));
+    const seen = new Set<string>();
+    const extra = [...state.extraMcqs, ...state.published.extraMcqs, ...state.published.bankMcqs].filter((q) => (seen.has(q.id) ? false : (seen.add(q.id), true)));
+    return { allBooklets: [...state.importedBooklets, ...pub], allExtra: extra };
+  }, [state.importedBooklets, state.extraMcqs, state.published]);
+
+  // Keep the shared content arrays in sync before children render.
   const contentVersion = useMemo(() => {
-    setImportedContent(state.importedBooklets, state.extraMcqs);
-    return state.importedBooklets.length * 100000 + state.extraMcqs.length;
-  }, [state.importedBooklets, state.extraMcqs]);
+    setImportedContent(allBooklets, allExtra);
+    return allBooklets.reduce((n, b) => n + (b.updatedAt ?? b.createdAt) % 100000, allBooklets.length * 7 + allExtra.length);
+  }, [allBooklets, allExtra]);
 
   const isDark = state.appearance === 'dark' || (state.appearance === 'system' && scheme === 'dark');
+
+  const acc = state.account;
+  const isAdmin = acc?.kind === 'admin';
+  const isStaff = isAdmin || acc?.kind === 'staff';
+  const can = (perm: Account['perms'][number]) => !!acc && (isAdmin || (acc.kind === 'staff' && acc.perms.includes(perm)));
+  const canUpload = can('content');
+  const premium = isStaff || acc?.plan === 'premium';
+  const paid = isStaff || acc?.plan === 'pro' || acc?.plan === 'premium';
 
   const value = useMemo<Store>(
     () => ({
       ...state,
+      // The profile now comes from the signed-in account (null = show the sign-in screen).
+      profile: acc ? { name: acc.name, email: acc.email, stageId: acc.stageId as StageId } : null,
+      role: canUpload ? 'admin' : premium ? 'premium' : 'pro',
+      unlockedSubjects: paid ? subjects.map((x) => x.id) : [],
+      isStaff,
+      isAdmin,
+      can,
+      findBooklet: (id) => allBooklets.find((b) => b.id === id),
+      signIn: async (email, password) => {
+        const r = await api<{ session: Session; account: Account }>('/api/auth', { body: { action: 'login', email, password }, auth: false });
+        setSession(r.session);
+        update(() => ({ session: r.session, account: r.account }));
+        setTimeout(() => void sync(), 50);
+      },
+      signUp: async (p) => {
+        const r = await api<{ session: Session; account: Account }>('/api/auth', { body: { action: 'signup', ...p }, auth: false });
+        setSession(r.session);
+        update(() => ({ session: r.session, account: r.account }));
+        setTimeout(() => void sync(), 50);
+      },
+      sync,
+      setAccount: (a, session) => {
+        if (session) setSession(session);
+        update(() => (session ? { account: a, session } : { account: a }));
+      },
+      setMyRequest: (r) => update(() => ({ myRequest: r })),
+      markPublished: (b) =>
+        update((s) => ({
+          importedBooklets: s.importedBooklets.map((x) => (x.id === b.id ? b : x)),
+          publishedMeta: { ...s.publishedMeta, [b.id]: b.updatedAt ?? 0 },
+        })),
       ready,
       isDark,
       palette: isDark ? DarkPalette : LightPalette,
@@ -201,7 +353,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           studyDays: s.studyDays.includes(today()) ? s.studyDays : [...s.studyDays, today()].slice(-400),
         })),
       addImported: (b) => update((s) => ({ importedBooklets: [b, ...s.importedBooklets.filter((x) => x.id !== b.id)] })),
-      updateImported: (b) => update((s) => ({ importedBooklets: s.importedBooklets.map((x) => (x.id === b.id ? b : x)) })),
+      // Editing a published booklet on another device starts a local copy of it.
+      updateImported: (b) =>
+        update((s) => {
+          const nb = { ...b, updatedAt: Date.now() };
+          return { importedBooklets: s.importedBooklets.some((x) => x.id === b.id) ? s.importedBooklets.map((x) => (x.id === b.id ? nb : x)) : [nb, ...s.importedBooklets] };
+        }),
       removeImported: (id) => {
         deleteBookletImages(id);
         update((s) => ({
@@ -217,14 +374,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setDrawing: (topicId, strokes) => update((s) => ({ drawings: { ...s.drawings, [topicId]: strokes } })),
       setReaderPrefs: (patch) => update((s) => ({ readerPrefs: { ...s.readerPrefs, ...patch } })),
       addExtraMcqs: (list) => update((s) => ({ extraMcqs: [...s.extraMcqs, ...list] })),
-      canEdit: state.role === 'admin' || state.role === 'premium',
-      canUpload: state.role === 'admin',
-      canAddFiles: state.role === 'admin' || state.role === 'premium',
+      canEdit: premium,
+      canUpload,
+      canAddFiles: premium,
       streak: computeStreak(state.studyDays),
       contentVersion,
-      logOut: () => setState({ ...DEFAULTS, appearance: state.appearance, importedBooklets: state.importedBooklets, extraMcqs: state.extraMcqs }),
+      logOut: () => {
+        setSession(null);
+        // Personal files and published content stay on the device; account data is cleared.
+        setState({ ...DEFAULTS, appearance: state.appearance, language: state.language, importedBooklets: state.importedBooklets, extraMcqs: state.extraMcqs, published: state.published, publishedMeta: state.publishedMeta });
+      },
     }),
-    [state, ready, isDark, update, contentVersion],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state, ready, isDark, update, contentVersion, allBooklets, sync],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -9,7 +9,9 @@ import { Font, Type } from '@/constants/theme';
 import { UPLOADS_SUBJECT } from '@/data/content';
 import type { ImportedBooklet, Topic } from '@/data/types';
 import { generateMcqs, newId } from '@/lib/editor';
+import { unpublishBooklet } from '@/lib/publish';
 import { logError } from '@/lib/log';
+import { PublishCard } from '@/components/publish-card';
 import { useApp } from '@/store/app-store';
 import { t as tt } from '@/i18n';
 
@@ -18,7 +20,7 @@ export default function BookletEditor() {
   const app = useApp();
   const p = app.palette;
   const insets = useSafeAreaInsets();
-  const booklet = app.importedBooklets.find((b) => b.id === bookletId);
+  const booklet = app.findBooklet(bookletId);
   const [genState, setGenState] = useState<{ done: number; total: number } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -68,14 +70,17 @@ export default function BookletEditor() {
   };
 
   const deleteBooklet = () => {
-    const doIt = () => {
+    const doIt = async () => {
+      // A published booklet is removed for students too.
+      if (app.published.booklets.some((x) => x.id === booklet.id)) await unpublishBooklet(booklet.id).catch((e) => logError('publish', e, { step: 'unpublish' }));
       app.removeImported(booklet.id);
+      void app.sync();
       router.replace('/library');
     };
-    if (Platform.OS === 'web') return doIt();
+    if (Platform.OS === 'web') return void (window.confirm(tt('Delete this booklet?')) && doIt());
     Alert.alert(tt('Delete this booklet?'), tt('All its topics and questions will be removed.'), [
       { text: tt('Cancel'), style: 'cancel' },
-      { text: tt('Delete'), style: 'destructive', onPress: doIt },
+      { text: tt('Delete'), style: 'destructive', onPress: () => void doIt() },
     ]);
   };
 
@@ -118,6 +123,7 @@ export default function BookletEditor() {
         }
       />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 40 }} keyboardShouldPersistTaps="handled">
+        {booklet.subjectId && booklet.subjectId !== UPLOADS_SUBJECT.id ? <PublishCard booklet={booklet} /> : null}
         <Txt faint size={Type.tiny}>Booklet title</Txt>
         <TextInput
           value={booklet.title}
