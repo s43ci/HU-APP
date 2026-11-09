@@ -111,6 +111,8 @@ export default function Reader() {
   const [toast, setToast] = useState<string | null>(null);
   const [lastColor, setLastColor] = useState<HighlightColor>('yellow');
   const [erasing, setErasing] = useState(false);
+  /** The highlight just made with the pen: Translate / Ask AI / Note stay one tap away without leaving the pen. */
+  const [quickId, setQuickId] = useState<string | null>(null);
   const [translation, setTranslation] = useState<{ source: string; text: string; loading: boolean; error?: boolean } | null>(null);
 
   const restoreOffset = app.lastRead?.topicId === topicId ? app.lastRead.offset : 0;
@@ -309,8 +311,11 @@ export default function Reader() {
       app.removeMark(topic.id, m.id);
     });
     eraseRange(block, item, lo, hi, lastColor);
-    app.addMark(topic.id, { id: newMarkId(), block, item, start: lo, end: hi, color: lastColor, note, text: wordsOf(textOf(block, item), lo, hi), createdAt: clock() });
+    const id = newMarkId();
+    app.addMark(topic.id, { id, block, item, start: lo, end: hi, color: lastColor, note, text: wordsOf(textOf(block, item), lo, hi), createdAt: clock() });
+    setQuickId(id);
   };
+  const quickMark = quickId && mode === 'highlight' && !selMark ? marks.find((m) => m.id === quickId) : undefined;
 
   const paintFor = (block: number, item: number | undefined): Paint | null =>
     mode === 'highlight' && !selMark
@@ -318,7 +323,10 @@ export default function Reader() {
           color: HIGHLIGHT_COLORS[lastColor],
           erase: erasing,
           onPaint: (a, b) => paintRange(block, item, a, b),
-          onErase: (a, b) => eraseRange(block, item, a, b),
+          onErase: (a, b) => {
+            eraseRange(block, item, a, b);
+            setQuickId(null);
+          },
         }
       : null;
 
@@ -341,8 +349,8 @@ export default function Reader() {
     setSel(null);
     setSelMarkId(null);
   };
-  const translateSel = async () => {
-    const text = selText;
+  const translateSel = async (override?: string) => {
+    const text = override ?? selText;
     setTranslation({ source: text, text: '', loading: true });
     try {
       const out = await aiEdit('translate', text, topic.title);
@@ -351,8 +359,8 @@ export default function Reader() {
       setTranslation({ source: text, text: (e as Error).message, loading: false, error: true });
     }
   };
-  const askSel = () => {
-    const text = selText;
+  const askSel = (override?: string) => {
+    const text = override ?? selText;
     setSel(null);
     setSelMarkId(null);
     router.push({ pathname: '/ai/[topicId]', params: { topicId: topic.id, q: text } });
@@ -530,6 +538,17 @@ export default function Reader() {
           </View>
         </ScrollView>
 
+        {/* Quick actions for the highlight just made with the pen */}
+        {quickMark && !sel ? (
+          <View style={[styles.quickBar, { bottom: insets.bottom + 78, backgroundColor: theme === 'dark' ? '#25252F' : '#17172B' }]}>
+            <Text numberOfLines={1} style={[styles.selText, { flex: 1 }]}>“{quickMark.text}”</Text>
+            <SelBtn icon={Languages} label="Translate" onPress={() => translateSel(quickMark.text)} />
+            <SelBtn icon={Bot} label="Ask AI" onPress={() => askSel(quickMark.text)} />
+            <SelBtn icon={StickyNote} label={quickMark.note ? 'Edit note' : 'Note'} onPress={() => { setSelMarkId(quickMark.id); setNoteEditor({ text: quickMark.note ?? '' }); }} />
+            <SelBtn icon={X} label="Close" onPress={() => setQuickId(null)} />
+          </View>
+        ) : null}
+
         {/* Selection toolbar */}
         {sel || selMark ? (
           <View style={[styles.selBar, { bottom: insets.bottom + 92, backgroundColor: theme === 'dark' ? '#25252F' : '#17172B' }]}>
@@ -541,8 +560,8 @@ export default function Reader() {
               <View style={styles.selDivider} />
               <SelBtn icon={StickyNote} label={selMark?.note ? 'Edit note' : 'Note'} onPress={() => setNoteEditor({ text: selMark?.note ?? '' })} />
               <SelBtn icon={Copy} label="Copy" onPress={copySel} />
-              <SelBtn icon={Languages} label="Translate" onPress={translateSel} />
-              <SelBtn icon={Bot} label="Ask AI" onPress={askSel} />
+              <SelBtn icon={Languages} label="Translate" onPress={() => translateSel()} />
+              <SelBtn icon={Bot} label="Ask AI" onPress={() => askSel()} />
               {selMark ? <SelBtn icon={Trash2} label="Remove" onPress={removeSelMark} /> : null}
               <SelBtn icon={X} label="Close" onPress={() => { setSel(null); setSelMarkId(null); }} />
             </View>
@@ -645,10 +664,11 @@ export default function Reader() {
               <Pressable onPress={() => setTranslation(null)} style={[styles.noteBtn, { borderColor: p.border, borderWidth: 1 }]}>
                 <Txt weight="medium">Close</Txt>
               </Pressable>
-              {translation && !translation.loading && !translation.error && selMark ? (
+              {translation && !translation.loading && !translation.error && (selMark || quickMark) ? (
                 <Pressable
                   onPress={() => {
-                    if (selMark && !selMark.id.startsWith('legacy-')) app.updateMark(topic.id, selMark.id, { note: translation.text });
+                    const target = selMark ?? quickMark;
+                    if (target && !target.id.startsWith('legacy-')) app.updateMark(topic.id, target.id, { note: translation.text });
                     setTranslation(null);
                     setSelMarkId(null);
                     flash('Saved as note');
@@ -1022,6 +1042,7 @@ const styles = StyleSheet.create({
   swatch: { width: 26, height: 26, borderRadius: 13 },
   selDivider: { width: StyleSheet.hairlineWidth, height: 26, backgroundColor: 'rgba(255,255,255,0.25)', marginHorizontal: 2 },
   selBtn: { alignItems: 'center', paddingHorizontal: 6, gap: 2 },
+  quickBar: { position: 'absolute', left: 12, right: 12, zIndex: 20, borderRadius: 20, paddingVertical: 8, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: 640, alignSelf: 'center', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 14, elevation: 10 },
   selBtnText: { fontFamily: Font.medium, fontSize: 10, color: 'rgba(255,255,255,0.85)' },
   selHint: { fontFamily: Font.regular, fontSize: 11, color: 'rgba(255,255,255,0.6)' },
   bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 6 },
