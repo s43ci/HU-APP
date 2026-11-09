@@ -1,14 +1,14 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Bookmark, Check, ChevronRight, Heart, ListChecks, Pencil, Play, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, Bookmark, Check, ChevronRight, Heart, ListChecks, Lock, Pencil, Play, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Chip, CircleButton, Icon, ProgressBar, SubjectThumb, Txt } from '@/components/ui';
+import { Chip, CircleButton, EmptyState, Icon, ProgressBar, SubjectThumb, TopBar, Txt } from '@/components/ui';
 import { Type } from '@/constants/theme';
 import { bookletsOf, getSubject, isStudioBooklet, stageName, topicsOf, topicsOfSubject, UPLOADS_SUBJECT } from '@/data/content';
-import { bookletProgress } from '@/lib/progress';
-import { useApp } from '@/store/app-store';
+import { bookletProgress, isSubjectUnlocked } from '@/lib/progress';
+import { accessOf, useApp } from '@/store/app-store';
 import { t as tt } from '@/i18n';
 
 export default function SubjectScreen() {
@@ -25,6 +25,22 @@ export default function SubjectScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: p.bg, alignItems: 'center', justifyContent: 'center' }}>
         <Txt muted>Subject not found.</Txt>
+      </View>
+    );
+  }
+
+  if (!isSubjectUnlocked(subject.id, app.unlockedSubjects)) {
+    const premiumOnly = accessOf(subject.id, subject.isFree, app.subjectAccess) === 'premium';
+    return (
+      <View style={{ flex: 1, backgroundColor: p.bg }}>
+        <TopBar title={subject.name} />
+        <EmptyState
+          icon={Lock}
+          title="This subject is locked"
+          text={premiumOnly ? 'This subject is for Premium subscribers.' : 'Subscribe to Pro or Premium to open this subject.'}
+          action="See plans"
+          onAction={() => router.replace({ pathname: '/settings/[key]', params: { key: 'account' } })}
+        />
       </View>
     );
   }

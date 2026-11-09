@@ -56,6 +56,8 @@ type Persisted = {
   published: { updatedAt: number; booklets: ImportedBooklet[]; extraMcqs: Mcq[]; bankMcqs: Mcq[]; versions: Record<string, number> };
   /** Studio booklet id -> its local updatedAt when last published. */
   publishedMeta: Record<string, number>;
+  /** Plan needed to open each subject, set by the admin (missing = built-in default). */
+  subjectAccess: Record<string, 'free' | 'pro' | 'premium'>;
 };
 
 const EMPTY_PUBLISHED: Persisted['published'] = { updatedAt: 0, booklets: [], extraMcqs: [], bankMcqs: [], versions: {} };
@@ -92,6 +94,7 @@ const DEFAULTS: Persisted = {
   myRequest: null,
   published: EMPTY_PUBLISHED,
   publishedMeta: {},
+  subjectAccess: {},
 };
 
 const KEY = 'booklit.state.v1';
@@ -142,6 +145,10 @@ type Store = Persisted & {
 };
 
 const Ctx = createContext<Store | null>(null);
+
+const PLAN_RANK = { free: 0, pro: 1, premium: 2 } as const;
+/** The plan a subject needs: the admin's choice, else free subjects are free and the rest need Pro. */
+export const accessOf = (id: string, isFree: boolean, map: Record<string, 'free' | 'pro' | 'premium'>) => map[id] ?? (isFree ? 'free' : 'pro');
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -208,9 +215,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       const cur = stateRef.current;
       const [me, index] = await Promise.all([
         getSession() ? api<{ account: Account; plans: PlanConfig; request: SubRequest | null }>('/api/me').catch(() => null) : Promise.resolve(null),
-        api<{ updatedAt: number; booklets: { id: string; updatedAt: number }[] }>('/api/content', { auth: false }).catch(() => null),
+        api<{ updatedAt: number; booklets: { id: string; updatedAt: number }[]; access?: Persisted['subjectAccess'] }>('/api/content', { auth: false }).catch(() => null),
       ]);
       if (me) update(() => ({ account: me.account, plans: me.plans, myRequest: me.request }));
+      if (index?.access && JSON.stringify(index.access) !== JSON.stringify(cur.subjectAccess)) update(() => ({ subjectAccess: index.access ?? {} }));
       if (index && index.updatedAt !== cur.published.updatedAt) {
         const old = cur.published;
         const keep = new Map(old.booklets.map((b) => [b.id, b]));
@@ -282,7 +290,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const can = (perm: Account['perms'][number]) => !!acc && (isAdmin || (acc.kind === 'staff' && acc.perms.includes(perm)));
   const canUpload = can('content');
   const premium = isStaff || acc?.plan === 'premium';
-  const paid = isStaff || acc?.plan === 'pro' || acc?.plan === 'premium';
 
   const value = useMemo<Store>(
     () => ({
@@ -290,7 +297,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       // The profile now comes from the signed-in account (null = show the sign-in screen).
       profile: acc ? { name: acc.name, email: acc.email, stageId: acc.stageId as StageId } : null,
       role: canUpload ? 'admin' : premium ? 'premium' : 'pro',
-      unlockedSubjects: paid ? subjects.map((x) => x.id) : [],
+      unlockedSubjects: subjects.filter((x) => isStaff || x.id === 'uploads' || PLAN_RANK[accessOf(x.id, x.isFree, state.subjectAccess)] <= PLAN_RANK[acc?.plan ?? 'free']).map((x) => x.id),
       isStaff,
       isAdmin,
       can,

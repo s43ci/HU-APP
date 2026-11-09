@@ -157,6 +157,18 @@ export const POST = handle(async (request) => {
       return json({ plans: next, prices: { pro: finalPrice(next, 'pro'), premium: finalPrice(next, 'premium') } });
     }
 
+    // ----- which plan opens each subject -----
+    case 'subjects.save': {
+      await requirePerm(request, 'pricing');
+      const inp = (b.access ?? {}) as Record<string, unknown>;
+      const access: Record<string, string> = {};
+      Object.entries(inp).forEach(([k, v]) => {
+        if (/^[\w-]{1,60}$/.test(k) && (v === 'free' || v === 'pro' || v === 'premium')) access[k] = v;
+      });
+      await putJson('config/subjects.json', access);
+      return json({ access });
+    }
+
     // ----- staff (admin only) -----
     case 'staff.list': {
       await requirePerm(request, 'admin');

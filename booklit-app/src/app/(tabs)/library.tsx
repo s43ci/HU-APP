@@ -9,7 +9,7 @@ import { Type } from '@/constants/theme';
 import { bookletsOf, courseSubjects, stages, topicsOf, topicsOfSubject, UPLOADS_SUBJECT } from '@/data/content';
 import type { StageId, Subject } from '@/data/types';
 import { isSubjectUnlocked } from '@/lib/progress';
-import { useApp } from '@/store/app-store';
+import { accessOf, useApp } from '@/store/app-store';
 
 type StageFilter = 'all' | StageId;
 
@@ -125,7 +125,7 @@ export default function Library() {
         </>
       )}
 
-      <LockedModal visible={!!locked} subjectName={locked?.name} onClose={() => setLocked(null)} />
+      <LockedModal visible={!!locked} subjectName={locked?.name} plan={locked && accessOf(locked.id, locked.isFree, app.subjectAccess) === 'premium' ? 'premium' : 'pro'} onClose={() => setLocked(null)} />
     </Page>
   );
 }

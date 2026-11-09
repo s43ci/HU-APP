@@ -3,7 +3,7 @@ import { bookletsOf, getSubject, topicsOf, topicsOfSubject } from '@/data/conten
 
 export function isSubjectUnlocked(subjectId: string, unlocked: string[]) {
   const s = getSubject(subjectId);
-  return !!s && (s.isFree || unlocked.includes(subjectId));
+  return !!s && unlocked.includes(subjectId);
 }
 
 export function subjectProgress(subjectId: string, completed: string[]) {

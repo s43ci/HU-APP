@@ -7,7 +7,7 @@ import { IS_AR } from '@/i18n';
 import { usePalette } from '@/store/app-store';
 import { Button, Icon, Txt } from './ui';
 
-export function LockedModal({ visible, onClose, subjectName }: { visible: boolean; onClose: () => void; subjectName?: string }) {
+export function LockedModal({ visible, onClose, subjectName, plan }: { visible: boolean; onClose: () => void; subjectName?: string; plan?: 'pro' | 'premium' }) {
   const p = usePalette();
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
@@ -20,7 +20,7 @@ export function LockedModal({ visible, onClose, subjectName }: { visible: boolea
             {IS_AR ? `${subjectName ?? 'هذه المادة'} مقفلة` : `${subjectName ?? 'This subject'} is locked`}
           </Txt>
           <Txt muted style={{ textAlign: 'center', marginTop: 8, lineHeight: 22 }}>
-            Subscribe to Pro or Premium to open every subject.
+            {plan === 'premium' ? 'This subject is for Premium subscribers.' : 'Subscribe to Pro or Premium to open this subject.'}
           </Txt>
           <View style={{ alignSelf: 'stretch', gap: 8, marginTop: 20 }}>
             <Button

@@ -650,6 +650,12 @@ export const AR: Record<string, string> = {
   'Tap another word to select up to it · or use the highlighter pen to drag': 'اضغط على كلمة أخرى لتحديد ما بينهما · أو استخدم قلم التظليل للسحب',
   'Select': 'تحديد',
   'Drag over the text to select it, then translate, ask AI, copy or add a note.': 'اسحب فوق النص لتحديده، ثم ترجمه أو اسأل عنه الذكاء الاصطناعي أو انسخه أو أضف ملاحظة.',
+  'Who can open each subject': 'من يستطيع فتح كل مادة',
+  'Free: every student. Pro: Pro and Premium subscribers. Premium: Premium subscribers only. Changes reach students within a few minutes.': 'مجاني: جميع الطلاب. Pro: مشتركو Pro وPremium. Premium: مشتركو Premium فقط. تصل التغييرات إلى الطلاب خلال دقائق.',
+  'You can view this but not change it.': 'يمكنك العرض دون التعديل.',
+  'This subject is for Premium subscribers.': 'هذه المادة متاحة لمشتركي Premium فقط.',
+  'Subscribe to Pro or Premium to open this subject.': 'اشترك في Pro أو Premium لفتح هذه المادة.',
+  'This subject is locked': 'هذه المادة مقفلة',
 };
 
 /** Templates for strings that contain numbers. */
