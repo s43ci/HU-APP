@@ -453,6 +453,23 @@ export const AR: Record<string, string> = {
   Header: 'العنوان',
   'Full screen_': 'شاشة كاملة',
   'Ask AI_': 'اسأل',
+  'My Files': 'ملفاتي',
+  'My files': 'ملفاتي',
+  'Booklets made from your own files.': 'ملازم من ملفاتك الخاصة.',
+  'Turn your own PDFs into booklets': 'حوّل ملفات PDF الخاصة بك إلى ملازم',
+  'Your own library · Premium': 'مكتبتك الخاصة · بريميوم',
+  'Turn your own PDFs into booklets, or open a PDF from any app with Booklit.': 'حوّل ملفاتك إلى ملازم، أو افتح أي PDF من أي تطبيق بـ Booklit.',
+  'A Premium feature': 'ميزة بريميوم',
+  'With Premium you can turn your own PDFs and notes into Booklit booklets, and open any PDF with Booklit from other apps.': 'مع بريميوم تكدر تحوّل ملفاتك وملاحظاتك إلى ملازم Booklit، وتفتح أي PDF من باقي التطبيقات بـ Booklit مباشرة.',
+  'See plans': 'شوف الباقات',
+  'Install Booklit': 'ثبّت Booklit',
+  'Full screen, faster, works offline. Free.': 'شاشة كاملة، أسرع، ويشتغل بدون نت. مجاناً.',
+  'Install': 'تثبيت',
+  'Add Booklit to your Home Screen': 'أضف Booklit للشاشة الرئيسية',
+  'Open this page in Safari, then:': 'افتح الصفحة بـ Safari، وبعدين:',
+  "Tap the Share button in Safari's toolbar": 'اضغط زر المشاركة بشريط Safari',
+  'Choose “Add to Home Screen”, then Add': 'اختار «إضافة إلى الشاشة الرئيسية» ثم إضافة',
+  'Got it': 'تمام',
 };
 
 /** Templates for strings that contain numbers. */

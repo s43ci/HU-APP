@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { Bell, BookOpen, Bot, ChartColumn, LibraryBig, Play, Search, Sparkles, Wand2 } from 'lucide-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { InstallApp } from '@/components/install-app';
 import { ArrowCircle, Card, CircleButton, Heading, Icon, Page, ProgressBar, SectionTitle, SubjectThumb, Txt } from '@/components/ui';
 import { Type } from '@/constants/theme';
 import { booklets, getBooklet, getSubject, getTopic, topicsOf } from '@/data/content';
@@ -69,6 +70,8 @@ export default function Home() {
         {app.canUpload ? <CircleButton icon={Wand2} label="BOOKLIT Studio" onPress={() => router.push('/studio')} /> : null}
         <CircleButton icon={LibraryBig} label="Library" onPress={() => router.push('/library')} />
       </View>
+
+      <InstallApp />
 
       {/* Continue card */}
       <LinearGradient colors={['#5B4CF0', '#493BEA', '#3A2FD0']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>

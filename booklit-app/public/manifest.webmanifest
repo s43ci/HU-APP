@@ -1,0 +1,30 @@
+{
+  "id": "/",
+  "name": "Booklit",
+  "short_name": "Booklit",
+  "description": "Dental booklets, ministry MCQs, Ask AI and progress tracking.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#F4F4F8",
+  "theme_color": "#F4F4F8",
+  "lang": "ar",
+  "dir": "auto",
+  "categories": ["education", "medical"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "share_target": {
+    "action": "/share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": { "title": "title", "files": [{ "name": "file", "accept": ["application/pdf", ".pdf", "image/*", ".docx", ".pptx"] }] }
+  },
+  "file_handlers": [
+    { "action": "/share-target", "accept": { "application/pdf": [".pdf"] } }
+  ]
+}

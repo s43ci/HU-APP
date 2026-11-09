@@ -202,12 +202,12 @@ export const mcqs: Mcq[] = topics.flatMap((t) => {
 /** Virtual subject that holds the student's uploaded files. */
 export const UPLOADS_SUBJECT: Subject = {
   id: 'uploads',
-  name: 'My Uploads',
+  name: 'My Files',
   stageId: 'stage5',
   color: '#493BEA',
   icon: 'file',
   isFree: true,
-  description: 'Booklets generated from your own files.',
+  description: 'Booklets made from your own files.',
 };
 subjects.push(UPLOADS_SUBJECT);
 

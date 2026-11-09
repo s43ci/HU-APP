@@ -94,7 +94,6 @@ function Row({ cells, widths, header, zebra, theme, accent, fs }: { cells: strin
         return (
           <Text
             key={c}
-            selectable
             style={[
               styles.td,
               { width: wd, color: rt.text, fontSize: 13 * fs, lineHeight: 19 * fs, fontFamily: header ? Font.semibold : c === 0 ? Font.medium : Font.regular },

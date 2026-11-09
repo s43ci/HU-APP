@@ -63,7 +63,7 @@ export default function SubjectScreen() {
                 {studio && app.canEdit ? (
                   <CircleButton icon={Pencil} variant="glass" label="Edit booklet" onPress={() => router.push({ pathname: '/editor/[bookletId]', params: { bookletId: current.id } })} />
                 ) : null}
-                {studio && app.canUpload ? (
+                {studio && (app.canUpload || (isUploads && app.canAddFiles)) ? (
                   <CircleButton icon={Trash2} variant="glass" label="Delete booklet" onPress={removeUpload} />
                 ) : null}
                 {!isUploads ? (

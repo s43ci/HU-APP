@@ -77,10 +77,10 @@ export default function Library() {
         })}
       </View>
 
-      {app.canUpload || uploads.length ? (
+      {app.canAddFiles || uploads.length ? (
         <>
       <View style={{ marginTop: 26 }}>
-        <SectionTitle title="Studio drafts" action={uploads.length ? `${uploads.length} files` : undefined} />
+        <SectionTitle title={app.canUpload ? 'Studio drafts' : 'My files'} action={uploads.length ? `${uploads.length} files` : undefined} />
       </View>
       <View style={{ gap: 10 }}>
         {uploads.map((b) => (
@@ -93,7 +93,7 @@ export default function Library() {
             <ArrowCircle onPress={() => router.push({ pathname: '/subject/[id]', params: { id: UPLOADS_SUBJECT.id, booklet: b.id } })} />
           </Card>
         ))}
-        {app.canUpload ? (
+        {app.canAddFiles ? (
         <Pressable onPress={() => router.push('/import')} style={({ pressed }) => [styles.uploadCard, { borderColor: p.border }, pressed && { opacity: 0.8 }]}>
           <View style={[styles.plus, { backgroundColor: p.primarySoft }]}>
             <Icon as={Plus} size={18} color={p.primary} />
@@ -105,9 +105,25 @@ export default function Library() {
         </Pressable>
         ) : null}
       </View>
-
         </>
-      ) : null}
+      ) : (
+        <>
+      <View style={{ marginTop: 26 }}>
+        <SectionTitle title="My files" />
+      </View>
+      <View>
+        <Pressable onPress={() => router.push({ pathname: '/settings/[key]', params: { key: 'account' } })} style={({ pressed }) => [styles.uploadCard, { borderColor: p.border }, pressed && { opacity: 0.8 }]}>
+          <View style={[styles.plus, { backgroundColor: p.primarySoft }]}>
+            <Icon as={Plus} size={18} color={p.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Txt weight="semibold">Your own library · Premium</Txt>
+            <Txt muted size={Type.tiny}>Turn your own PDFs into booklets, or open a PDF from any app with Booklit.</Txt>
+          </View>
+        </Pressable>
+      </View>
+        </>
+      )}
 
       <LockedModal visible={!!locked} subjectName={locked?.name} onClose={() => setLocked(null)} />
     </Page>

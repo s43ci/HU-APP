@@ -104,6 +104,8 @@ type Store = Persisted & {
   addExtraMcqs: (list: Mcq[]) => void;
   canEdit: boolean;
   canUpload: boolean;
+  /** Premium and admin can turn their own files into booklets (personal library). */
+  canAddFiles: boolean;
   streak: number;
   contentVersion: number;
 };
@@ -217,6 +219,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       addExtraMcqs: (list) => update((s) => ({ extraMcqs: [...s.extraMcqs, ...list] })),
       canEdit: state.role === 'admin' || state.role === 'premium',
       canUpload: state.role === 'admin',
+      canAddFiles: state.role === 'admin' || state.role === 'premium',
       streak: computeStreak(state.studyDays),
       contentVersion,
       logOut: () => setState({ ...DEFAULTS, appearance: state.appearance, importedBooklets: state.importedBooklets, extraMcqs: state.extraMcqs }),

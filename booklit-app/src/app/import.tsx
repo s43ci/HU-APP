@@ -1,9 +1,10 @@
 import type { DocumentPickerAsset } from 'expo-document-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { router } from 'expo-router';
+import { File as FsFile } from 'expo-file-system';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Check, CircleAlert, FilePlus2, FileText, FileUp, Image as ImageIcon, Presentation, RefreshCw, ScrollText, ShieldCheck, Sparkles, Wand2, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Chip, EmptyState, Heading, Icon, SubjectThumb, TopBar, Txt } from '@/components/ui';
@@ -27,6 +28,9 @@ export default function ImportScreen() {
   const app = useApp();
   const p = app.palette;
   const insets = useSafeAreaInsets();
+  const { shared, sharedUri } = useLocalSearchParams<{ shared?: string; sharedUri?: string }>();
+  // Premium students build booklets for their own library only (no subject picking, no Studio).
+  const personal = !app.canUpload;
   const [file, setFile] = useState<DocumentPickerAsset | null>(null);
   const [opts, setOpts] = useState<ImportOptions>({ design: 'enhanced', questionsPerTopic: 5, subjectId: UPLOADS_SUBJECT.id });
   const [state, setState] = useState<{ phase: 'idle' | 'working' | 'error'; error?: string; step: number }>({ phase: 'idle', step: 0 });
@@ -39,11 +43,46 @@ export default function ImportScreen() {
   }, [state.phase]);
   useEffect(() => () => abort.current?.abort(), []);
 
-  if (!app.canUpload) {
+  // A PDF shared to Booklit from another app (installed web app share sheet, or Android "Open with").
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (Platform.OS === 'web' && shared && typeof caches !== 'undefined') {
+          const cache = await caches.open('booklit-shared');
+          const res = await cache.match('/shared-file');
+          if (!res) return;
+          const blob = await res.blob();
+          const name = decodeURIComponent(res.headers.get('X-File-Name') || 'Shared file.pdf');
+          const f = new File([blob], name, { type: blob.type || 'application/pdf' });
+          await cache.delete('/shared-file');
+          if (!cancelled) setFile({ name, size: f.size, mimeType: f.type, uri: URL.createObjectURL(f), file: f, lastModified: Date.now() });
+        } else if (sharedUri) {
+          const f = new FsFile(sharedUri);
+          const raw = decodeURIComponent(sharedUri.split('/').pop() ?? '');
+          const name = /\.pdf$/i.test(raw) ? raw.split(':').pop()! : 'Shared file.pdf';
+          if (!cancelled) setFile({ name, size: f.size ?? undefined, mimeType: 'application/pdf', uri: sharedUri, lastModified: Date.now() });
+        }
+      } catch (e) {
+        log('error', 'share', 'Could not open shared file', { message: (e as Error).message });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [shared, sharedUri]);
+
+  if (!app.canAddFiles) {
     return (
       <View style={{ flex: 1, backgroundColor: p.bg }}>
-        <TopBar title="Upload" />
-        <EmptyState icon={ShieldCheck} title="For the BOOKLIT team" text="Uploading and designing booklets is done by the admin in BOOKLIT Studio." />
+        <TopBar title="My files" />
+        <EmptyState
+          icon={ShieldCheck}
+          title="A Premium feature"
+          text="With Premium you can turn your own PDFs and notes into Booklit booklets, and open any PDF with Booklit from other apps."
+          action="See plans"
+          onAction={() => router.replace({ pathname: '/settings/[key]', params: { key: 'account' } })}
+        />
       </View>
     );
   }
@@ -66,11 +105,11 @@ export default function ImportScreen() {
     abort.current = new AbortController();
     const timer = setTimeout(() => abort.current?.abort(), 5 * 60 * 1000);
     try {
-      const { booklet } = await convertFile(file, { ...opts, unlimited: app.canUpload }, abort.current.signal, (stage) => {
+      const { booklet } = await convertFile(file, { ...opts, subjectId: personal ? UPLOADS_SUBJECT.id : opts.subjectId, unlimited: app.canUpload }, abort.current.signal, (stage) => {
         if (stage === 'images') setState((st) => ({ ...st, step: Math.max(st.step, 4) }));
       });
       app.addImported(booklet);
-      router.replace({ pathname: '/subject/[id]', params: { id: opts.subjectId ?? UPLOADS_SUBJECT.id, booklet: booklet.id } });
+      router.replace({ pathname: '/subject/[id]', params: { id: personal ? UPLOADS_SUBJECT.id : opts.subjectId ?? UPLOADS_SUBJECT.id, booklet: booklet.id } });
     } catch (e) {
       const aborted = (e as Error).name === 'AbortError';
       if (aborted) log('error', 'upload', 'Timed out or cancelled', { name: file.name, size: file.size });
@@ -85,7 +124,7 @@ export default function ImportScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: p.bg }}>
-      <TopBar title="New booklet" onBack={() => { abort.current?.abort(); router.back(); }} />
+       <TopBar title={personal ? 'My files' : 'New booklet'} onBack={() => { abort.current?.abort(); router.back(); }} />
       <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 4, paddingBottom: insets.bottom + 120 }}>
         <Heading light="Upload a file," strong="AI builds the booklet." size={24} />
         <Txt muted size={Type.small} style={{ marginTop: 8, lineHeight: 20 }}>
@@ -146,6 +185,7 @@ export default function ImportScreen() {
 
         {!working ? (
           <>
+            {personal ? null : (<>
             {/* 2. Subject */}
             <StepLabel n={2} label="Where does it go?" done />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20 }} contentContainerStyle={{ gap: 10, paddingHorizontal: 20 }}>
@@ -160,9 +200,10 @@ export default function ImportScreen() {
                 );
               })}
             </ScrollView>
+            </>)}
 
             {/* 3. Design */}
-            <StepLabel n={3} label="How should it look?" done />
+            <StepLabel n={personal ? 2 : 3} label="How should it look?" done />
             <View style={{ gap: 8 }}>
               <Choice
                 on={opts.design === 'enhanced'}
@@ -181,7 +222,7 @@ export default function ImportScreen() {
             </View>
 
             {/* 4. Questions */}
-            <StepLabel n={4} label="Questions per topic" done />
+            <StepLabel n={personal ? 3 : 4} label="Questions per topic" done />
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {[3, 5, 8].map((n) => (
                 <Chip key={n} label={`${n} questions`} active={opts.questionsPerTopic === n} onPress={() => setOpts({ ...opts, questionsPerTopic: n })} />
@@ -203,7 +244,7 @@ export default function ImportScreen() {
           </View>
         ) : null}
 
-        {!working ? (
+        {!working && !personal ? (
           <Button
             label="Or start an empty booklet"
             icon={FilePlus2}

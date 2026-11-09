@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import {
   Bell,
+  FileUp,
   Bug,
   Crown,
   Wand2,
@@ -28,6 +29,7 @@ import { Card, Icon, Page, Txt, TabHeader } from '@/components/ui';
 import { Type } from '@/constants/theme';
 import { stageName, subjects } from '@/data/content';
 import { formatStudyTime, initials, startedBooklets } from '@/lib/progress';
+import { InstallApp } from '@/components/install-app';
 import { useApp } from '@/store/app-store';
 import { t as tt } from '@/i18n';
 
@@ -43,6 +45,7 @@ export default function Profile() {
   const rows: { icon: LucideIcon; label: string; sub: string; onPress: () => void }[] = [
     { icon: Crown, label: 'Account & plan', sub: `${ROLE_LABEL[app.role]} plan`, onPress: () => open('account') },
     ...(app.canUpload ? [{ icon: Wand2, label: 'BOOKLIT Studio', sub: 'Upload, design and question banks', onPress: () => router.push('/studio') }] : []),
+    ...(app.canAddFiles && !app.canUpload ? [{ icon: FileUp, label: 'My files', sub: 'Turn your own PDFs into booklets', onPress: () => router.push('/import') }] : []),
     { icon: Pencil, label: 'Edit profile', sub: 'Name, email and stage', onPress: () => open('edit-profile') },
     { icon: Heart, label: 'Saved', sub: 'Your booklets and topics', onPress: () => router.push('/favorites') },
     { icon: RotateCcw, label: 'Recently viewed', sub: 'Pick up where you left off', onPress: () => open('recent') },
@@ -98,7 +101,9 @@ export default function Profile() {
         <Triple icon={Flame} value={`${app.streak}`} label="Day streak" />
       </Card>
 
-      <View style={{ gap: 8, marginTop: 18 }}>
+      <View style={{ height: 18 }} />
+      <InstallApp compact />
+      <View style={{ gap: 8 }}>
         {rows.map((r) => (
           <Card key={r.label} style={styles.row} onPress={r.onPress}>
             <View style={[styles.rowIcon, { backgroundColor: p.primarySoft }]}>
