@@ -230,6 +230,15 @@ export const POST = handle(async (request) => {
       await removeObjects('booklit', [`content/booklets/${id}.json`]);
       return json({ ok: true });
     }
+    case 'content.hide': {
+      // Delete (hide) a built-in booklet for every student, or restore it.
+      await requirePerm(request, 'content');
+      const id = str(b.id, 120);
+      const cur = await getJson<string[]>('config/hidden.json', []);
+      const next = b.hidden === false ? cur.filter((x) => x !== id) : [...new Set([...cur, id])];
+      await putJson('config/hidden.json', next);
+      return json({ hidden: next });
+    }
     case 'content.mcqs': {
       // Question-bank MCQs added to the built-in course topics.
       await requirePerm(request, 'content');

@@ -11,6 +11,7 @@ import { bookletProgress, isSubjectUnlocked, subjectProgress } from '@/lib/progr
 import { useApp } from '@/store/app-store';
 
 export default function Progress() {
+  'use no memo'; // reads the shared content lists, which change when booklets are published or deleted
   const app = useApp();
   const p = app.palette;
   const [open, setOpen] = useState<string | null>(null);

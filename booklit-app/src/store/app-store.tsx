@@ -58,6 +58,8 @@ type Persisted = {
   publishedMeta: Record<string, number>;
   /** Plan needed to open each subject, set by the admin (missing = built-in default). */
   subjectAccess: Record<string, 'free' | 'pro' | 'premium'>;
+  /** Booklets the admin deleted for everyone. */
+  hiddenBooklets: string[];
 };
 
 const EMPTY_PUBLISHED: Persisted['published'] = { updatedAt: 0, booklets: [], extraMcqs: [], bankMcqs: [], versions: {} };
@@ -95,6 +97,7 @@ const DEFAULTS: Persisted = {
   published: EMPTY_PUBLISHED,
   publishedMeta: {},
   subjectAccess: {},
+  hiddenBooklets: [],
 };
 
 const KEY = 'booklit.state.v1';
@@ -215,10 +218,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       const cur = stateRef.current;
       const [me, index] = await Promise.all([
         getSession() ? api<{ account: Account; plans: PlanConfig; request: SubRequest | null }>('/api/me').catch(() => null) : Promise.resolve(null),
-        api<{ updatedAt: number; booklets: { id: string; updatedAt: number }[]; access?: Persisted['subjectAccess'] }>('/api/content', { auth: false }).catch(() => null),
+        api<{ updatedAt: number; booklets: { id: string; updatedAt: number }[]; access?: Persisted['subjectAccess']; hidden?: string[] }>('/api/content', { auth: false }).catch(() => null),
       ]);
       if (me) update(() => ({ account: me.account, plans: me.plans, myRequest: me.request }));
       if (index?.access && JSON.stringify(index.access) !== JSON.stringify(cur.subjectAccess)) update(() => ({ subjectAccess: index.access ?? {} }));
+      if (index?.hidden && JSON.stringify(index.hidden) !== JSON.stringify(cur.hiddenBooklets)) update(() => ({ hiddenBooklets: index.hidden ?? [] }));
       if (index && index.updatedAt !== cur.published.updatedAt) {
         const old = cur.published;
         const keep = new Map(old.booklets.map((b) => [b.id, b]));
@@ -278,9 +282,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   // Keep the shared content arrays in sync before children render.
   const contentVersion = useMemo(() => {
-    setImportedContent(allBooklets, allExtra);
-    return allBooklets.reduce((n, b) => n + (b.updatedAt ?? b.createdAt) % 100000, allBooklets.length * 7 + allExtra.length);
-  }, [allBooklets, allExtra]);
+    setImportedContent(allBooklets, allExtra, state.hiddenBooklets);
+    return allBooklets.reduce((n, b) => n + (b.updatedAt ?? b.createdAt) % 100000, allBooklets.length * 7 + allExtra.length + state.hiddenBooklets.length * 131);
+  }, [allBooklets, allExtra, state.hiddenBooklets]);
 
   const isDark = state.appearance === 'dark' || (state.appearance === 'system' && scheme === 'dark');
 

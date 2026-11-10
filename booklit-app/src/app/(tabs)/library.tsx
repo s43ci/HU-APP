@@ -14,6 +14,7 @@ import { accessOf, useApp } from '@/store/app-store';
 type StageFilter = 'all' | StageId;
 
 export default function Library() {
+  'use no memo'; // reads the shared content lists, which change when booklets are published or deleted
   const params = useLocalSearchParams<{ stage?: string }>();
   const app = useApp();
   const p = app.palette;

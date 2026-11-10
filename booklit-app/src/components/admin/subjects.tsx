@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { Type } from '@/constants/theme';
-import { stages, subjects } from '@/data/content';
+import { builtinBooklet, getSubject, stages, subjects } from '@/data/content';
 import { t as tt } from '@/i18n';
 import { accessOf, useApp } from '@/store/app-store';
 import { Card, SubjectThumb, Txt } from '../ui';
@@ -76,10 +76,44 @@ export function Subjects() {
         );
       })}
       {!editable ? <Txt faint size={Type.tiny}>You can view this but not change it.</Txt> : null}
+
+      {app.hiddenBooklets.length && app.canUpload ? (
+        <View style={{ gap: 8, marginTop: 10 }}>
+          <Txt weight="semibold">Deleted booklets</Txt>
+          {app.hiddenBooklets.map((id) => {
+            const b = builtinBooklet(id);
+            return (
+              <Card key={id} style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <Txt weight="medium" numberOfLines={1}>{b?.title ?? id}</Txt>
+                  <Txt faint size={Type.tiny}>{b ? getSubject(b.subjectId)?.name : ''}</Txt>
+                </View>
+                <Pressable
+                  disabled={!!busy}
+                  onPress={async () => {
+                    setBusy(id);
+                    try {
+                      const d = await adm<{ hidden: string[] }>('content.hide', { id, hidden: false });
+                      app.set({ hiddenBooklets: d.hidden });
+                    } catch (e) {
+                      setError((e as Error).message);
+                    } finally {
+                      setBusy(null);
+                    }
+                  }}
+                  style={[styles.restore, { backgroundColor: p.primarySoft }]}>
+                  {busy === id ? <ActivityIndicator size="small" color={p.primary} /> : <Txt weight="semibold" size={Type.small} color={p.primary}>Restore</Txt>}
+                </Pressable>
+              </Card>
+            );
+          })}
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 },
+  restore: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, minWidth: 80, alignItems: 'center' },
 });

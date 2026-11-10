@@ -16,6 +16,10 @@ export const GET = handle(async (request) => {
     return data ? json(data) : json({ error: 'Not found' }, 404);
   }
   if (url.searchParams.get('mcqs')) return json(await getJson('content/mcqs.json', { updatedAt: 0, mcqs: [] }));
-  const [index, access] = await Promise.all([getJson('content/index.json', { updatedAt: 0, booklets: [] }), getJson<Record<string, string>>('config/subjects.json', {})]);
-  return json({ ...index, access });
+  const [index, access, hidden] = await Promise.all([
+    getJson('content/index.json', { updatedAt: 0, booklets: [] }),
+    getJson<Record<string, string>>('config/subjects.json', {}),
+    getJson<string[]>('config/hidden.json', []),
+  ]);
+  return json({ ...index, access, hidden });
 });

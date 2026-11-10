@@ -12,6 +12,7 @@ import { useApp } from '@/store/app-store';
 
 /** BOOKLIT Studio: the admin's production line (upload & design booklets, question banks, manage). */
 export default function Studio() {
+  'use no memo'; // reads the shared content lists, which change when booklets are published or deleted
   const app = useApp();
   const p = app.palette;
   const insets = useSafeAreaInsets();

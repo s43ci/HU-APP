@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Bookmark, Check, ChevronRight, Heart, ListChecks, Lock, Pencil, Play, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, Bookmark, Check, ChevronRight, Heart, ListChecks, Lock, Pencil, Play, Share2, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,10 +8,14 @@ import { Chip, CircleButton, EmptyState, Icon, ProgressBar, SubjectThumb, TopBar
 import { Type } from '@/constants/theme';
 import { bookletsOf, getSubject, isStudioBooklet, stageName, topicsOf, topicsOfSubject, UPLOADS_SUBJECT } from '@/data/content';
 import { bookletProgress, isSubjectUnlocked } from '@/lib/progress';
+import { adm, confirm } from '@/components/admin/common';
+import { unpublishBooklet } from '@/lib/publish';
+import { bookletUrl, shareLink } from '@/lib/share';
 import { accessOf, useApp } from '@/store/app-store';
-import { t as tt } from '@/i18n';
+import { IS_AR } from '@/i18n';
 
 export default function SubjectScreen() {
+  'use no memo'; // reads the shared content lists, which change when booklets are published or deleted
   const { id, booklet } = useLocalSearchParams<{ id: string; booklet?: string }>();
   const app = useApp();
   const p = app.palette;
@@ -53,18 +57,34 @@ export default function SubjectScreen() {
   const isUploads = subject.id === UPLOADS_SUBJECT.id;
   const studio = !!current && isStudioBooklet(current.id);
 
-  const removeUpload = () => {
+  const published = !!current && app.published.booklets.some((b) => b.id === current.id);
+  // Admin: delete any booklet for every student (built-in ones can be restored from the dashboard).
+  // Premium students: delete their own files.
+  const canDelete = !!current && (app.canUpload || (isUploads && studio && app.canAddFiles));
+  const removeBooklet = async () => {
     if (!current) return;
-    const doIt = () => {
-      app.removeImported(current.id);
-      router.back();
-    };
-    if (Platform.OS === 'web') return doIt();
-    Alert.alert(tt('Delete this booklet?'), current.title, [
-      { text: tt('Cancel'), style: 'cancel' },
-      { text: tt('Delete'), style: 'destructive', onPress: doIt },
-    ]);
+    const forEveryone = app.canUpload && !isUploads;
+    if (!(await confirm('Delete this booklet?', forEveryone ? 'It is removed for every student.' : current.title, 'Delete', true))) return;
+    try {
+      if (studio) {
+        if (published) await unpublishBooklet(current.id);
+        app.removeImported(current.id);
+      } else {
+        const r = await adm<{ hidden: string[] }>('content.hide', { id: current.id, hidden: true });
+        app.set({ hiddenBooklets: r.hidden });
+      }
+      setPicked(undefined);
+      void app.sync();
+      if (list.length <= 1) router.back();
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert(msg);
+    }
   };
+  const share = () =>
+    current &&
+    void shareLink(current.title, IS_AR ? `ملزمة ${current.title} على Booklit` : `${current.title} on Booklit`, bookletUrl(subject.id, current.id));
 
   return (
     <View style={{ flex: 1, backgroundColor: p.bg }}>
@@ -79,9 +99,8 @@ export default function SubjectScreen() {
                 {studio && app.canEdit ? (
                   <CircleButton icon={Pencil} variant="glass" label="Edit booklet" onPress={() => router.push({ pathname: '/editor/[bookletId]', params: { bookletId: current.id } })} />
                 ) : null}
-                {studio && (app.canUpload || (isUploads && app.canAddFiles)) ? (
-                  <CircleButton icon={Trash2} variant="glass" label="Delete booklet" onPress={removeUpload} />
-                ) : null}
+                {canDelete ? <CircleButton icon={Trash2} variant="glass" label="Delete booklet" onPress={() => void removeBooklet()} /> : null}
+                {!isUploads ? <CircleButton icon={Share2} variant="glass" label="Share booklet" onPress={share} /> : null}
                 {!isUploads ? (
                   <CircleButton icon={Heart} variant="glass" label="Save booklet" onPress={() => app.toggleFavoriteBooklet(current.id)} />
                 ) : null}

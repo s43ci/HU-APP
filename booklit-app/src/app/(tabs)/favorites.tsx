@@ -9,6 +9,7 @@ import { getBooklet, getSubject, getTopic, stageName, topicsOf, UPLOADS_SUBJECT 
 import { useApp } from '@/store/app-store';
 
 export default function Favorites() {
+  'use no memo'; // reads the shared content lists, which change when booklets are published or deleted
   const app = useApp();
   const p = app.palette;
   const [tab, setTab] = useState<'booklets' | 'topics'>('booklets');

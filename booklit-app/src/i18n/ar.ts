@@ -656,6 +656,14 @@ export const AR: Record<string, string> = {
   'This subject is for Premium subscribers.': 'هذه المادة متاحة لمشتركي Premium فقط.',
   'Subscribe to Pro or Premium to open this subject.': 'اشترك في Pro أو Premium لفتح هذه المادة.',
   'This subject is locked': 'هذه المادة مقفلة',
+  'Deleted booklets': 'الملازم المحذوفة',
+  'Restore': 'استعادة',
+  'It is removed for every student.': 'ستُحذف لدى جميع الطلاب.',
+  'Share booklet': 'مشاركة الملزمة',
+  'Share Booklit': 'مشاركة Booklit',
+  'Send the app to your friends': 'أرسل التطبيق إلى أصدقائك',
+  'Link copied. Paste it anywhere to share.': 'تم نسخ الرابط، الصقه في أي مكان لمشاركته.',
+  'Study your dental booklets with Booklit: ministry MCQs, Ask AI and more.': 'ادرس ملازم طب الأسنان مع Booklit: أسئلة وزارية ومساعد ذكي والمزيد.',
 };
 
 /** Templates for strings that contain numbers. */

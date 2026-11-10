@@ -11,6 +11,7 @@ import { bookletProgress, greeting, initials, isSubjectUnlocked, startedBooklets
 import { useApp } from '@/store/app-store';
 
 export default function Home() {
+  'use no memo'; // reads the shared content lists, which change when booklets are published or deleted
   const app = useApp();
   const { profile, lastRead, completedTopics, topicProgress, palette: p } = app;
   const first = profile?.name.split(' ')[0] ?? '';

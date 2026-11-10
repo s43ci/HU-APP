@@ -214,22 +214,30 @@ subjects.push(UPLOADS_SUBJECT);
 /** Course subjects only (excludes "My Uploads"). */
 export const courseSubjects = () => subjects.filter((s) => s.id !== UPLOADS_SUBJECT.id);
 
+// Built-in content as shipped, so booklets the admin deleted can be removed and restored.
+const BUILTIN = { booklets: [...booklets], topics: [...topics], mcqs: [...mcqs] };
+export const builtinBooklet = (id: string) => BUILTIN.booklets.find((b) => b.id === id);
+const fill = <T,>(arr: T[], items: T[]) => {
+  arr.length = 0;
+  arr.push(...items);
+};
+
 let importedIds = new Set<string>();
-let extraIds = new Set<string>();
 /**
  * Merge Studio content into the shared arrays (called by the store):
  * uploaded/created booklets (placed in their chosen subject) and MCQs imported from question banks.
  */
-export function setImportedContent(list: ImportedBooklet[], extra: Mcq[] = []) {
-  for (let i = booklets.length - 1; i >= 0; i--) if (importedIds.has(booklets[i].id)) booklets.splice(i, 1);
-  for (let i = topics.length - 1; i >= 0; i--) if (importedIds.has(topics[i].bookletId)) topics.splice(i, 1);
-  for (let i = mcqs.length - 1; i >= 0; i--) {
-    const q = mcqs[i];
-    if (extraIds.has(q.id) || [...importedIds].some((b) => q.topicId.startsWith(`${b}--`))) mcqs.splice(i, 1);
-  }
+export function setImportedContent(allList: ImportedBooklet[], extra: Mcq[] = [], hiddenIds: string[] = []) {
+  // Start again from the built-in content without the booklets the admin deleted.
+  const hidden = new Set(hiddenIds);
+  const list = allList.filter((b) => !hidden.has(b.id));
+  const shownTopics = BUILTIN.topics.filter((t) => !hidden.has(t.bookletId));
+  const shownTopicIds = new Set(shownTopics.map((t) => t.id));
+  fill(booklets, BUILTIN.booklets.filter((b) => !hidden.has(b.id)));
+  fill(topics, shownTopics);
+  fill(mcqs, BUILTIN.mcqs.filter((q) => shownTopicIds.has(q.topicId)));
 
   importedIds = new Set(list.map((b) => b.id));
-  extraIds = new Set(extra.map((q) => q.id));
   list.forEach((b) => {
     const subjectId = b.subjectId && subjects.some((s) => s.id === b.subjectId) ? b.subjectId : UPLOADS_SUBJECT.id;
     const order = booklets.filter((x) => x.subjectId === subjectId).length + 1;

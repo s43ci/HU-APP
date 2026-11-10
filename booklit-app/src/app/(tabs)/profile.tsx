@@ -14,6 +14,7 @@ import {
   Info,
   KeyRound,
   LifeBuoy,
+  Share2,
   ListChecks,
   LogOut,
   Moon,
@@ -31,6 +32,7 @@ import { Type } from '@/constants/theme';
 import { stageName, subjects } from '@/data/content';
 import { formatStudyTime, initials, startedBooklets } from '@/lib/progress';
 import { InstallApp } from '@/components/install-app';
+import { shareApp } from '@/lib/share';
 import { useApp } from '@/store/app-store';
 import { t as tt } from '@/i18n';
 
@@ -56,6 +58,7 @@ export default function Profile() {
     { icon: Globe, label: 'Language', sub: app.language, onPress: () => open('language') },
     { icon: KeyRound, label: 'Change password', sub: 'Account security', onPress: () => open('password') },
     { icon: Bug, label: 'Error log', sub: 'Share problems with the BOOKLIT team', onPress: () => router.push('/error-log') },
+    { icon: Share2, label: 'Share Booklit', sub: 'Send the app to your friends', onPress: () => void shareApp() },
     { icon: LifeBuoy, label: 'Help & support', sub: 'Talk to the BOOKLIT team', onPress: () => open('help') },
     { icon: Info, label: 'About Booklit', sub: 'Version 1.0.0', onPress: () => open('about') },
   ];
