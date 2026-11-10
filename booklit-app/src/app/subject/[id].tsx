@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Chip, CircleButton, EmptyState, Icon, ProgressBar, SubjectThumb, TopBar, Txt } from '@/components/ui';
 import { Type } from '@/constants/theme';
-import { bookletsOf, getSubject, isStudioBooklet, stageName, topicsOf, topicsOfSubject, UPLOADS_SUBJECT } from '@/data/content';
+import { bookletsOf, builtinBooklet, editableCopy, getSubject, isStudioBooklet, stageName, topicsOf, topicsOfSubject, UPLOADS_SUBJECT } from '@/data/content';
 import { bookletProgress, isSubjectUnlocked } from '@/lib/progress';
 import { adm, confirm } from '@/components/admin/common';
 import { unpublishBooklet } from '@/lib/publish';
@@ -57,7 +57,7 @@ export default function SubjectScreen() {
   const isUploads = subject.id === UPLOADS_SUBJECT.id;
   const studio = !!current && isStudioBooklet(current.id);
 
-  const published = !!current && app.published.booklets.some((b) => b.id === current.id);
+  const published = !!current && (app.published.booklets.some((b) => b.id === current.id) || current.id in app.publishedMeta);
   // Admin: delete any booklet for every student (built-in ones can be restored from the dashboard).
   // Premium students: delete their own files.
   const canDelete = !!current && (app.canUpload || (isUploads && studio && app.canAddFiles));
@@ -69,6 +69,11 @@ export default function SubjectScreen() {
       if (studio) {
         if (published) await unpublishBooklet(current.id);
         app.removeImported(current.id);
+        // An edited built-in booklet: also remove the original for everyone.
+        if (builtinBooklet(current.id) && app.canUpload) {
+          const r = await adm<{ hidden: string[] }>('content.hide', { id: current.id, hidden: true });
+          app.set({ hiddenBooklets: r.hidden });
+        }
       } else {
         const r = await adm<{ hidden: string[] }>('content.hide', { id: current.id, hidden: true });
         app.set({ hiddenBooklets: r.hidden });
@@ -81,6 +86,15 @@ export default function SubjectScreen() {
       if (Platform.OS === 'web') window.alert(msg);
       else Alert.alert(msg);
     }
+  };
+  // Built-in booklets are edited through a Studio copy that keeps the same id.
+  const editBooklet = () => {
+    if (!current) return;
+    if (!studio) {
+      const copy = editableCopy(current.id);
+      if (copy) app.addImported(copy);
+    }
+    router.push({ pathname: '/editor/[bookletId]', params: { bookletId: current.id } });
   };
   const share = () =>
     current &&
@@ -96,9 +110,7 @@ export default function SubjectScreen() {
             <CircleButton icon={ArrowLeft} variant="glass" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/library'))} />
             {current ? (
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                {studio && app.canEdit ? (
-                  <CircleButton icon={Pencil} variant="glass" label="Edit booklet" onPress={() => router.push({ pathname: '/editor/[bookletId]', params: { bookletId: current.id } })} />
-                ) : null}
+                {app.canEdit && (studio || app.canUpload) ? <CircleButton icon={Pencil} variant="glass" label="Edit booklet" onPress={editBooklet} /> : null}
                 {canDelete ? <CircleButton icon={Trash2} variant="glass" label="Delete booklet" onPress={() => void removeBooklet()} /> : null}
                 {!isUploads ? <CircleButton icon={Share2} variant="glass" label="Share booklet" onPress={share} /> : null}
                 {!isUploads ? (

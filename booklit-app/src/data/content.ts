@@ -217,6 +217,25 @@ export const courseSubjects = () => subjects.filter((s) => s.id !== UPLOADS_SUBJ
 // Built-in content as shipped, so booklets the admin deleted can be removed and restored.
 const BUILTIN = { booklets: [...booklets], topics: [...topics], mcqs: [...mcqs] };
 export const builtinBooklet = (id: string) => BUILTIN.booklets.find((b) => b.id === id);
+
+/** An editable Studio copy of a built-in booklet (same ids, so progress, highlights and notes are kept). */
+export function editableCopy(id: string): ImportedBooklet | null {
+  const b = BUILTIN.booklets.find((x) => x.id === id);
+  if (!b) return null;
+  const tps = BUILTIN.topics.filter((t) => t.bookletId === id).map((t) => ({ ...t, blocks: t.blocks.map((bl) => ({ ...bl })) }));
+  const ids = new Set(tps.map((t) => t.id));
+  return {
+    id,
+    title: b.title,
+    fileName: '',
+    language: 'English',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    subjectId: b.subjectId,
+    topics: tps,
+    mcqs: BUILTIN.mcqs.filter((q) => ids.has(q.topicId)).map((q) => ({ ...q })),
+  };
+}
 const fill = <T,>(arr: T[], items: T[]) => {
   arr.length = 0;
   arr.push(...items);
@@ -231,14 +250,25 @@ export function setImportedContent(allList: ImportedBooklet[], extra: Mcq[] = []
   // Start again from the built-in content without the booklets the admin deleted.
   const hidden = new Set(hiddenIds);
   const list = allList.filter((b) => !hidden.has(b.id));
+  // A built-in booklet that was edited in Studio is replaced by its edited copy (same id, same place in the list).
+  const edited = new Map(list.filter((b) => BUILTIN.booklets.some((x) => x.id === b.id)).map((b) => [b.id, b]));
+  edited.forEach((_, id) => hidden.add(id));
   const shownTopics = BUILTIN.topics.filter((t) => !hidden.has(t.bookletId));
   const shownTopicIds = new Set(shownTopics.map((t) => t.id));
-  fill(booklets, BUILTIN.booklets.filter((b) => !hidden.has(b.id)));
+  fill(
+    booklets,
+    BUILTIN.booklets.filter((b) => !hidden.has(b.id) || edited.has(b.id)).map((b) => (edited.has(b.id) ? { ...b, title: edited.get(b.id)!.title } : b)),
+  );
   fill(topics, shownTopics);
   fill(mcqs, BUILTIN.mcqs.filter((q) => shownTopicIds.has(q.topicId)));
 
   importedIds = new Set(list.map((b) => b.id));
   list.forEach((b) => {
+    if (edited.has(b.id)) {
+      topics.push(...b.topics);
+      mcqs.push(...b.mcqs);
+      return;
+    }
     const subjectId = b.subjectId && subjects.some((s) => s.id === b.subjectId) ? b.subjectId : UPLOADS_SUBJECT.id;
     const order = booklets.filter((x) => x.subjectId === subjectId).length + 1;
     booklets.push({ id: b.id, subjectId, title: b.title, order });

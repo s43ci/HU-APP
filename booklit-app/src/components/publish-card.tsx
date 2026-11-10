@@ -17,8 +17,12 @@ export function usePublishStatus(b: ImportedBooklet): PublishStatus {
   const app = useApp();
   const live = app.published.booklets.some((x) => x.id === b.id) || b.id in app.publishedMeta;
   if (!live) return 'draft';
+  const local = app.importedBooklets.find((x) => x.id === b.id);
+  if (!local) return 'published';
   const at = app.publishedMeta[b.id];
-  return at === undefined || at === (b.updatedAt ?? 0) || !app.importedBooklets.some((x) => x.id === b.id) ? 'published' : 'changed';
+  // Published from this device: compare with the copy that was sent. From another device: compare edit time with the server's.
+  if (at !== undefined) return at === (local.updatedAt ?? 0) ? 'published' : 'changed';
+  return (local.updatedAt ?? 0) > (app.published.versions[b.id] ?? 0) ? 'changed' : 'published';
 }
 
 export function StatusTag({ status }: { status: PublishStatus }) {
