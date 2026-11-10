@@ -9,11 +9,12 @@ import { Requests } from '@/components/admin/requests';
 import { Staff } from '@/components/admin/staff';
 import { Students } from '@/components/admin/students';
 import { Subjects } from '@/components/admin/subjects';
+import { Usage } from '@/components/admin/usage';
 import { Chip, TopBar, Txt } from '@/components/ui';
 import { Type } from '@/constants/theme';
 import { useApp } from '@/store/app-store';
 
-type Tab = 'overview' | 'requests' | 'students' | 'pricing' | 'subjects' | 'staff';
+type Tab = 'overview' | 'usage' | 'requests' | 'students' | 'pricing' | 'subjects' | 'staff';
 
 /** Admin & moderator dashboard. Each section shows only for the permissions this account has. */
 export default function AdminDashboard() {
@@ -27,6 +28,7 @@ export default function AdminDashboard() {
 
   const tabs: { key: Tab; label: string; show: boolean }[] = [
     { key: 'overview', label: 'Overview', show: true },
+    { key: 'usage', label: 'Usage', show: app.can('stats') },
     { key: 'requests', label: 'Requests', show: app.can('requests') },
     { key: 'students', label: 'Students', show: app.can('students') },
     { key: 'pricing', label: 'Prices', show: true },
@@ -53,6 +55,7 @@ export default function AdminDashboard() {
       </View>
       <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 4, paddingBottom: insets.bottom + 40, width: '100%', maxWidth: Math.min(width, 760), alignSelf: 'center' }} keyboardShouldPersistTaps="handled">
         {tab === 'overview' ? <Overview go={(t) => setTab(t as Tab)} /> : null}
+        {tab === 'usage' ? <Usage /> : null}
         {tab === 'requests' ? <Requests /> : null}
         {tab === 'students' ? <Students /> : null}
         {tab === 'pricing' ? <Pricing /> : null}

@@ -14,7 +14,7 @@ type Body = { subject?: string; booklet?: string; topic?: string; topicText?: st
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-File-Name, X-File-Type, X-Options',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-File-Name, X-File-Type, X-Options, X-Platform',
 };
 
 const SYSTEM = `You are BOOKLIT's study assistant for dental students in Iraq.
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
         contents: history.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content.slice(0, 4000) }] })),
         generationConfig: { maxOutputTokens: 900, temperature: 0.4 },
       }),
-    });
+    }, 2, 'ask');
   } catch (e) {
     return json({ error: (e as Error).message }, 503);
   }

@@ -7,6 +7,9 @@
  *   Storage bucket. Images of published booklets go to a public bucket so every device can load them.
  */
 import { CORS, json } from './gemini';
+import { countRequest, getLimits, monthAiCost, type Limits } from './usage';
+
+let limitsCache: { at: number; value: Limits } | null = null;
 
 export { CORS, json };
 
@@ -282,6 +285,7 @@ export const newId = () => `${Date.now().toString(36)}${Math.random().toString(3
 export function handle(fn: (request: Request) => Promise<Response>) {
   return async (request: Request) => {
     try {
+      await countRequest().catch(() => {});
       return await fn(request);
     } catch (e) {
       if (e instanceof HttpError) return json({ error: e.message }, e.status);
@@ -299,8 +303,14 @@ export const optionsHandler = () => new Response(null, { headers: CORS });
  */
 export async function aiGate(request: Request, level: 'user' | 'files'): Promise<Response | null> {
   try {
+    await countRequest().catch(() => {});
     const a = await requireUser(request);
     if (level === 'files' && !(a.plan === 'premium' || can(a, 'content'))) return json({ error: 'Converting your own files is part of Premium.' }, 403);
+    // Monthly AI budget set by the admin: when it is used up, AI pauses for students (staff keep it).
+    if (!isStaff(a)) {
+      limitsCache = limitsCache && Date.now() - limitsCache.at < 5 * 60_000 ? limitsCache : { at: Date.now(), value: await getLimits() };
+      if ((await monthAiCost()) >= limitsCache.value.aiBudgetUsd) return json({ error: 'AI is paused for the rest of this month (usage limit reached). It comes back automatically next month.' }, 429);
+    }
     return null;
   } catch (e) {
     return json({ error: (e as Error).message }, e instanceof HttpError ? e.status : 401);

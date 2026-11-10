@@ -23,6 +23,7 @@ import {
   type PlanConfig,
   type SubRequest,
 } from '@/server/supa';
+import { bucketSize, DEFAULT_LIMITS, getLimits, monthUsage, totals, type Limits } from '@/server/usage';
 
 /**
  * Admin dashboard API. Every call: POST { action, ...params } with the staff member's token.
@@ -44,6 +45,25 @@ async function allRequests(): Promise<SubRequest[]> {
   const files = await listObjects('requests/all', 300);
   const list = await Promise.all(files.filter((f) => f.name.endsWith('.json')).map((f) => getJson<SubRequest | null>(`requests/all/${f.name}`, null)));
   return list.filter((r): r is SubRequest => !!r).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** Usage against plan limits, with warnings at 80% and 100%. */
+async function usageReport() {
+  const [days, limits, users, files, media] = await Promise.all([monthUsage(), getLimits(), listUsers(), bucketSize('booklit'), bucketSize('booklit-media')]);
+  const t = totals(days);
+  const storageMb = (files + media) / 1024 / 1024;
+  const meters = [
+    { key: 'ai', label: 'AI (Gemini) this month', used: Math.round(t.ai.cost * 10000) / 10000, limit: limits.aiBudgetUsd, unit: 'USD' },
+    { key: 'hosting', label: 'Server requests (Expo Hosting)', used: t.requests, limit: limits.hostingRequests, unit: 'requests' },
+    { key: 'storage', label: 'File storage (Supabase)', used: Math.round(storageMb * 10) / 10, limit: limits.storageMb, unit: 'MB' },
+    { key: 'accounts', label: 'Active accounts (Supabase)', used: Math.max(t.activeUsers, 0), limit: limits.accounts, unit: 'users', total: users.length },
+    { key: 'android', label: 'Android app users (Expo Update)', used: t.android, limit: limits.androidMau, unit: 'users' },
+  ].map((m) => ({ ...m, pct: m.limit > 0 ? m.used / m.limit : 1 }));
+  const alerts = meters.filter((m) => m.pct >= 0.8).map((m) => ({ key: m.key, label: m.label, pct: m.pct, level: m.pct >= 1 ? 'over' : 'near' }));
+  const daily = Object.entries(days)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([d, u]) => ({ day: d, requests: u.requests, ai: Object.values(u.ai).reduce((n, x) => n + (x?.cost ?? 0), 0), aiCalls: Object.values(u.ai).reduce((n, x) => n + (x?.calls ?? 0), 0) }));
+  return { meters, alerts, limits, ai: t.ai, aiByKind: t.aiByKind, platforms: { web: t.web, android: t.android, ios: t.ios }, daily, accountsTotal: users.length };
 }
 
 export const OPTIONS = optionsHandler;
@@ -83,6 +103,23 @@ export const POST = handle(async (request) => {
         pending: reqs.filter((r) => r.status === 'pending').length,
         plans,
       });
+    }
+
+    // ----- usage & limits -----
+    case 'usage': {
+      const me = await requireUser(request);
+      if (!can(me, 'stats')) throw new HttpError(403, 'You do not have permission for this.');
+      return json(await usageReport());
+    }
+    case 'limits.save': {
+      await requirePerm(request, 'admin');
+      const inp = (b.limits ?? {}) as Partial<Limits>;
+      const cur = await getLimits();
+      const next = Object.fromEntries(
+        (Object.keys(DEFAULT_LIMITS) as (keyof Limits)[]).map((k) => [k, num(inp[k], 0, 1e9, cur[k])]),
+      ) as Limits;
+      await putJson('config/limits.json', next);
+      return json({ limits: next });
     }
 
     // ----- subscription requests -----

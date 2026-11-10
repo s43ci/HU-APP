@@ -13,7 +13,7 @@ const MODEL = 'gemini-3.5-flash-lite';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-File-Name, X-File-Type, X-Options',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-File-Name, X-File-Type, X-Options, X-Platform',
 };
 
 const PROMPT = `You convert study material into a structured digital booklet for dental students.
@@ -146,7 +146,7 @@ export async function POST(request: Request) {
         contents: [{ role: 'user', parts: [part, { text: 'Convert this file into the booklet JSON.' }] }],
         generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, maxOutputTokens: 65536, temperature: 0.2 },
       }),
-    });
+    }, 2, 'import');
   } catch (e) {
     await cleanup();
     return json({ error: (e as GeminiError).message }, 503);

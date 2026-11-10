@@ -47,6 +47,7 @@ export async function POST(request: Request) {
       schema: SCHEMA,
       maxTokens: 8192,
       temperature: 0.5,
+      kind: 'mcq',
     });
     const mcqs = (out.mcqs ?? [])
       .map((q) => ({

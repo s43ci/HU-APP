@@ -76,7 +76,7 @@ ${topics.map((t: { id: string; title: string }) => `${t.id} = ${t.title}`).join(
         contents: [{ role: 'user', parts: [part, { text: 'Extract and assign all questions.' }] }],
         generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, maxOutputTokens: 65536, temperature: 0.1 },
       }),
-    });
+    }, 2, 'bank');
   } catch (e) {
     await cleanup();
     return json({ error: (e as GeminiError).message }, 503);

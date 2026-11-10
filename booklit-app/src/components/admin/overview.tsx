@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
-import { BadgeDollarSign, Crown, Inbox, ShieldBan, Sparkles, UserPlus, Users, Wand2 } from 'lucide-react-native';
+import { BadgeDollarSign, CircleAlert, Crown, Inbox, OctagonAlert, ShieldBan, Sparkles, UserPlus, Users, Wand2 } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
-import { Type } from '@/constants/theme';
+import { Brand, Type } from '@/constants/theme';
+import { t as tt } from '@/i18n';
 import { finalPrice, formatPrice, type PlanConfig } from '@/lib/api';
 import { useApp } from '@/store/app-store';
 import { Card, Icon, Txt, type LucideIcon } from '../ui';
@@ -14,11 +15,20 @@ type Stats = { students: number; newThisWeek: number; pro: number; premium: numb
 export function Overview({ go }: { go: (tab: string) => void }) {
   const app = useApp();
   const p = app.palette;
-  const [data, setData] = useState<{ stats: Stats | null; pending: number; plans: PlanConfig } | null>(null);
+  const [data, setData] = useState<{ stats: Stats | null; pending: number; plans: PlanConfig; alerts?: { key: string; label: string; pct: number; level: 'near' | 'over' }[] } | null>(null);
   const [error, setError] = useState('');
 
+  const [alerts, setAlerts] = useState<{ key: string; label: string; pct: number; level: 'near' | 'over' }[]>([]);
+  // Usage warnings load separately so the overview appears straight away.
+  useEffect(() => {
+    if (!app.can('stats')) return;
+    adm<{ meters: { key: string; label: string; pct: number }[] }>('usage')
+      .then((r) => setAlerts(r.meters.filter((m) => m.pct >= 0.8).map((m) => ({ key: m.key, label: m.label, pct: m.pct, level: m.pct >= 1 ? 'over' : 'near' }))))
+      .catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const load = useCallback(() => {
-    adm<{ stats: Stats | null; pending: number; plans: PlanConfig }>('overview')
+    adm<{ stats: Stats | null; pending: number; plans: PlanConfig; alerts?: { key: string; label: string; pct: number; level: 'near' | 'over' }[] }>('overview')
       .then((d) => {
         setData(d);
         setError('');
@@ -38,6 +48,15 @@ export function Overview({ go }: { go: (tab: string) => void }) {
 
   return (
     <View style={{ gap: 12 }}>
+      {alerts.map((a) => (
+        <Pressable key={a.key} onPress={() => go('usage')} style={({ pressed }) => [styles.pending, { backgroundColor: (a.level === 'over' ? Brand.danger : Brand.warning) + '18' }, pressed && { opacity: 0.85 }]}>
+          <Icon as={a.level === 'over' ? OctagonAlert : CircleAlert} size={20} color={a.level === 'over' ? Brand.danger : Brand.warning} />
+          <View style={{ flex: 1 }}>
+            <Txt weight="semibold">{tt(a.level === 'over' ? 'Limit reached' : 'Close to the limit')}</Txt>
+            <Txt size={Type.tiny} muted>{tt(a.label)} · {Math.round(a.pct * 100)}%</Txt>
+          </View>
+        </Pressable>
+      ))}
       {app.can('requests') ? (
         <Pressable onPress={() => go('requests')} style={({ pressed }) => [styles.pending, { backgroundColor: data.pending ? p.primary : p.surface }, pressed && { opacity: 0.9 }]}>
           <Icon as={Inbox} size={20} color={data.pending ? '#fff' : p.textMuted} />

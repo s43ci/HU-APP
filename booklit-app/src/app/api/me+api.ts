@@ -12,6 +12,7 @@ import {
   updateUser,
   type SubRequest,
 } from '@/server/supa';
+import { countUser } from '@/server/usage';
 
 /**
  * The signed-in student.
@@ -27,6 +28,7 @@ async function latestRequest(userId: string) {
 
 export const GET = handle(async (request) => {
   const account = await requireUser(request);
+  await countUser(account.id, request.headers.get('x-platform'));
   const [plans, req] = await Promise.all([getPlans(), latestRequest(account.id)]);
   return json({ account, plans, request: req });
 });

@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 import { t } from '@/i18n';
 import { API_BASE } from './ai';
 
@@ -58,7 +60,7 @@ export async function authHeader(): Promise<Record<string, string>> {
 
 export async function api<T>(path: string, init: { method?: string; body?: unknown; auth?: boolean } = {}): Promise<T> {
   const send = async () => {
-    const headers: Record<string, string> = { ...(init.auth === false ? {} : await authHeader()) };
+    const headers: Record<string, string> = { 'X-Platform': Platform.OS, ...(init.auth === false ? {} : await authHeader()) };
     if (init.body !== undefined) headers['Content-Type'] = 'application/json';
     return fetch(`${API_BASE}${path}`, { method: init.method ?? (init.body !== undefined ? 'POST' : 'GET'), headers, body: init.body !== undefined ? JSON.stringify(init.body) : undefined });
   };
