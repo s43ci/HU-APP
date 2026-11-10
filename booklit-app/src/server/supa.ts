@@ -30,6 +30,10 @@ export type Account = {
   blocked: boolean;
   createdAt: string;
   lastSignIn: string | null;
+  /** The student's latest subscription request (kept on the account so the admin list is one call). */
+  request: SubRequest | null;
+  /** Total approved payments. */
+  paidTotal: number;
 };
 
 export type PlanConfig = {
@@ -123,7 +127,7 @@ type SbUser = {
   created_at: string;
   last_sign_in_at?: string | null;
   user_metadata?: { name?: string; stageId?: string };
-  app_metadata?: { kind?: Kind; plan?: Plan; planUntil?: string | null; perms?: Perm[]; blocked?: boolean };
+  app_metadata?: { kind?: Kind; plan?: Plan; planUntil?: string | null; perms?: Perm[]; blocked?: boolean; request?: SubRequest | null; paidTotal?: number };
 };
 
 export function toAccount(u: SbUser): Account {
@@ -143,6 +147,8 @@ export function toAccount(u: SbUser): Account {
     blocked: !!am.blocked,
     createdAt: u.created_at,
     lastSignIn: u.last_sign_in_at ?? null,
+    request: am.request ?? null,
+    paidTotal: am.paidTotal ?? 0,
   };
 }
 
@@ -230,19 +236,29 @@ export async function getJson<T>(path: string, fallback: T): Promise<T> {
 }
 
 export async function putJson(path: string, data: unknown) {
-  await ensureBuckets();
-  const res = await sb(`/storage/v1/object/${BUCKET}/${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-upsert': 'true', 'cache-control': 'max-age=0' },
-    body: JSON.stringify(data),
-  });
+  const send = () =>
+    sb(`/storage/v1/object/${BUCKET}/${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-upsert': 'true', 'cache-control': 'max-age=0' },
+      body: JSON.stringify(data),
+    });
+  let res = await send();
+  if (res.status === 404 || (res.status === 400 && /bucket/i.test(await res.clone().text()))) {
+    await ensureBuckets();
+    res = await send();
+  }
   if (!res.ok) throw new HttpError(502, `Storage error (${res.status}): ${(await res.text()).slice(0, 120)}`);
 }
 
 export async function removeObjects(bucket: string, paths: string[]) {
   if (!paths.length) return;
-  await ensureBuckets();
   await sb(`/storage/v1/object/${bucket}`, { method: 'DELETE', body: JSON.stringify({ prefixes: paths }) });
+}
+
+/** Write an empty object: its name carries the data (one list call can then read 1,000 of them). */
+export async function putMarker(path: string) {
+  const res = await sb(`/storage/v1/object/${BUCKET}/${path}`, { method: 'POST', headers: { 'Content-Type': 'text/plain', 'x-upsert': 'true' }, body: '' });
+  if (!res.ok) throw new HttpError(502, `Storage error (${res.status})`);
 }
 
 export async function listObjects(prefix: string, limit = 200): Promise<{ name: string; created_at: string }[]> {
@@ -255,12 +271,17 @@ export async function listObjects(prefix: string, limit = 200): Promise<{ name: 
 }
 
 export async function putMedia(path: string, bytes: Uint8Array, mime: string) {
-  await ensureBuckets();
-  const res = await sb(`/storage/v1/object/${MEDIA}/${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': mime, 'x-upsert': 'true', 'cache-control': 'max-age=31536000' },
-    body: bytes as unknown as BodyInit,
-  });
+  const send = () =>
+    sb(`/storage/v1/object/${MEDIA}/${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': mime, 'x-upsert': 'true', 'cache-control': 'max-age=31536000' },
+      body: bytes as unknown as BodyInit,
+    });
+  let res = await send();
+  if (res.status === 404 || res.status === 400) {
+    await ensureBuckets();
+    res = await send();
+  }
   if (!res.ok) throw new HttpError(502, `Upload failed (${res.status})`);
   return `${env().url}/storage/v1/object/public/${MEDIA}/${path}`;
 }
@@ -303,13 +324,14 @@ export const optionsHandler = () => new Response(null, { headers: CORS });
  */
 export async function aiGate(request: Request, level: 'user' | 'files'): Promise<Response | null> {
   try {
-    await countRequest().catch(() => {});
+    await countRequest(false).catch(() => {});
     const a = await requireUser(request);
     if (level === 'files' && !(a.plan === 'premium' || can(a, 'content'))) return json({ error: 'Converting your own files is part of Premium.' }, 403);
     // Monthly AI budget set by the admin: when it is used up, AI pauses for students (staff keep it).
-    if (!isStaff(a)) {
-      limitsCache = limitsCache && Date.now() - limitsCache.at < 5 * 60_000 ? limitsCache : { at: Date.now(), value: await getLimits() };
-      if ((await monthAiCost()) >= limitsCache.value.aiBudgetUsd) return json({ error: 'AI is paused for the rest of this month (usage limit reached). It comes back automatically next month.' }, 429);
+    // File routes (conversion) only use what is already cached: they need their few outgoing calls for the file.
+    if (!isStaff(a) && (level === 'user' || limitsCache)) {
+      if (level === 'user') limitsCache = limitsCache && Date.now() - limitsCache.at < 5 * 60_000 ? limitsCache : { at: Date.now(), value: await getLimits() };
+      if ((await monthAiCost(level === 'user')) >= (limitsCache?.value.aiBudgetUsd ?? Infinity)) return json({ error: 'AI is paused for the rest of this month (usage limit reached). It comes back automatically next month.' }, 429);
     }
     return null;
   } catch (e) {

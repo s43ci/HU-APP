@@ -36,7 +36,7 @@ export function Requests() {
     setBusy(r.id);
     setError('');
     try {
-      const d = await adm<{ request: SubRequest }>('requests.decide', { id: r.id, approve, note: approve ? undefined : note });
+      const d = await adm<{ request: SubRequest }>('requests.decide', { id: r.id, userId: r.userId, approve, note: approve ? undefined : note });
       setList((l) => l?.map((x) => (x.id === r.id ? d.request : x)) ?? null);
       setRejecting(null);
       setNote('');

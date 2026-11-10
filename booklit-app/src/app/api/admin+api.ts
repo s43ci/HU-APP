@@ -9,7 +9,6 @@ import {
   HttpError,
   isStaff,
   json,
-  listObjects,
   listUsers,
   optionsHandler,
   PERMS,
@@ -19,11 +18,12 @@ import {
   requireUser,
   toAccount,
   updateUser,
+  type Account,
   type Perm,
   type PlanConfig,
   type SubRequest,
 } from '@/server/supa';
-import { bucketSize, DEFAULT_LIMITS, getLimits, monthUsage, totals, type Limits } from '@/server/usage';
+import { DEFAULT_LIMITS, foldUsage, getLimits, mediaBytes, monthUsage, totals, type Limits } from '@/server/usage';
 
 /**
  * Admin dashboard API. Every call: POST { action, ...params } with the staff member's token.
@@ -41,29 +41,32 @@ const num = (v: unknown, min: number, max: number, def: number) => {
 };
 const cleanPerms = (v: unknown): Perm[] => (Array.isArray(v) ? v.filter((p): p is Perm => (PERMS as readonly string[]).includes(p as string)) : []);
 
-async function allRequests(): Promise<SubRequest[]> {
-  const files = await listObjects('requests/all', 300);
-  const list = await Promise.all(files.filter((f) => f.name.endsWith('.json')).map((f) => getJson<SubRequest | null>(`requests/all/${f.name}`, null)));
-  return list.filter((r): r is SubRequest => !!r).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
+/** Every student's latest subscription request (stored on their account), newest first. */
+const requestsOf = (users: Account[]) =>
+  users
+    .filter((u) => u.request)
+    .map((u) => ({ ...(u.request as SubRequest), userId: u.id, name: u.name || u.request!.name, email: u.email }))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
 /** Usage against plan limits, with warnings at 80% and 100%. */
 async function usageReport() {
-  const [days, limits, users, files, media] = await Promise.all([monthUsage(), getLimits(), listUsers(), bucketSize('booklit'), bucketSize('booklit-media')]);
-  const t = totals(days);
-  const storageMb = (files + media) / 1024 / 1024;
+  // The host allows only ~8 outgoing calls per request: this report needs 4 (+1 to check the admin).
+  const [{ usage, needsFold }, limits, media] = await Promise.all([monthUsage(), getLimits(), mediaBytes()]);
+  const t = totals(usage);
+  const days = usage.days;
+  const storageMb = media / 1024 / 1024;
   const meters = [
     { key: 'ai', label: 'AI (Gemini) this month', used: Math.round(t.ai.cost * 10000) / 10000, limit: limits.aiBudgetUsd, unit: 'USD' },
     { key: 'hosting', label: 'Server requests (Expo Hosting)', used: t.requests, limit: limits.hostingRequests, unit: 'requests' },
-    { key: 'storage', label: 'File storage (Supabase)', used: Math.round(storageMb * 10) / 10, limit: limits.storageMb, unit: 'MB' },
-    { key: 'accounts', label: 'Active accounts (Supabase)', used: Math.max(t.activeUsers, 0), limit: limits.accounts, unit: 'users', total: users.length },
+    { key: 'storage', label: 'Uploaded images (Supabase)', used: Math.round(storageMb * 10) / 10, limit: limits.storageMb, unit: 'MB' },
+    { key: 'accounts', label: 'Active accounts (Supabase)', used: t.activeUsers, limit: limits.accounts, unit: 'users' },
     { key: 'android', label: 'Android app users (Expo Update)', used: t.android, limit: limits.androidMau, unit: 'users' },
   ].map((m) => ({ ...m, pct: m.limit > 0 ? m.used / m.limit : 1 }));
   const alerts = meters.filter((m) => m.pct >= 0.8).map((m) => ({ key: m.key, label: m.label, pct: m.pct, level: m.pct >= 1 ? 'over' : 'near' }));
   const daily = Object.entries(days)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([d, u]) => ({ day: d, requests: u.requests, ai: Object.values(u.ai).reduce((n, x) => n + (x?.cost ?? 0), 0), aiCalls: Object.values(u.ai).reduce((n, x) => n + (x?.calls ?? 0), 0) }));
-  return { meters, alerts, limits, ai: t.ai, aiByKind: t.aiByKind, platforms: { web: t.web, android: t.android, ios: t.ios }, daily, accountsTotal: users.length };
+  return { needsFold, meters, alerts, limits, ai: t.ai, aiByKind: t.aiByKind, platforms: { web: t.web, android: t.android, ios: t.ios }, daily };
 }
 
 export const OPTIONS = optionsHandler;
@@ -82,7 +85,8 @@ export const POST = handle(async (request) => {
       const me = await requireUser(request);
       if (!isStaff(me)) throw new HttpError(403, 'You do not have permission for this.');
       const showStats = can(me, 'stats');
-      const [users, reqs, plans] = await Promise.all([showStats ? listUsers() : Promise.resolve([]), can(me, 'requests') || showStats ? allRequests() : Promise.resolve([]), getPlans()]);
+      const [users, plans] = await Promise.all([listUsers(), getPlans()]);
+      const reqs = requestsOf(users);
       const students = users.filter((u) => u.kind === 'student');
       const weekAgo = Date.now() - 7 * 86400000;
       const approved = reqs.filter((r) => r.status === 'approved');
@@ -96,7 +100,7 @@ export const POST = handle(async (request) => {
               free: students.filter((u) => u.plan === 'free').length,
               blocked: users.filter((u) => u.blocked).length,
               staff: users.filter((u) => u.kind !== 'student').length,
-              revenue: approved.reduce((n, r) => n + (r.price || 0), 0),
+              revenue: users.reduce((n, u) => n + u.paidTotal, 0),
               approved: approved.length,
             }
           : null,
@@ -110,6 +114,11 @@ export const POST = handle(async (request) => {
       const me = await requireUser(request);
       if (!can(me, 'stats')) throw new HttpError(403, 'You do not have permission for this.');
       return json(await usageReport());
+    }
+    case 'usage.fold': {
+      const me = await requireUser(request);
+      if (!can(me, 'stats')) throw new HttpError(403, 'You do not have permission for this.');
+      return json(await foldUsage());
     }
     case 'limits.save': {
       await requirePerm(request, 'admin');
@@ -125,22 +134,23 @@ export const POST = handle(async (request) => {
     // ----- subscription requests -----
     case 'requests.list': {
       await requirePerm(request, 'requests');
-      return json({ requests: await allRequests() });
+      return json({ requests: requestsOf(await listUsers()) });
     }
     case 'requests.decide': {
       const me = await requirePerm(request, 'requests');
-      const id = str(b.id, 80);
-      const req = await getJson<SubRequest | null>(`requests/all/${id}.json`, null);
-      if (!req) throw new HttpError(404, 'Request not found.');
+      const user = toAccount(await getUserById(str(b.userId, 80)));
+      const req = user.request;
+      if (!req || (b.id && req.id !== b.id)) throw new HttpError(404, 'Request not found.');
       if (req.status !== 'pending') throw new HttpError(409, 'This request was already handled.');
       const approve = b.approve === true;
       const decided: SubRequest = { ...req, status: approve ? 'approved' : 'rejected', decidedAt: new Date().toISOString(), decidedBy: me.name || me.email, note: str(b.note, 300) || undefined };
+      const app: Record<string, unknown> = { request: decided };
       if (approve) {
         const plans = await getPlans();
         const days = num(b.days, 1, 3650, plans.plans[req.plan].days);
-        await updateUser(req.userId, { app: { plan: req.plan, planUntil: new Date(Date.now() + days * 86400000).toISOString() } });
+        Object.assign(app, { plan: req.plan, planUntil: new Date(Date.now() + days * 86400000).toISOString(), paidTotal: user.paidTotal + (req.price || 0) });
       }
-      await Promise.all([putJson(`requests/all/${id}.json`, decided), putJson(`requests/by-user/${req.userId}.json`, decided)]);
+      await updateUser(user.id, { app });
       return json({ request: decided });
     }
 

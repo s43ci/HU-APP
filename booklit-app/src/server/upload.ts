@@ -137,17 +137,17 @@ export async function geminiPart(up: Upload, key: string): Promise<{ part: Recor
   if (!done.ok) throw new Error(`File upload to the AI service failed (${done.status}).`);
   let file = ((await done.json()) as { file: { name: string; uri: string; state: string } }).file;
   // Large PDFs can need a moment of processing before they can be used.
-  for (let i = 0; i < 30 && file.state === 'PROCESSING'; i++) {
-    await new Promise((r) => setTimeout(r, 1000));
+  // At most 2 checks: the host allows only a few outgoing calls per request.
+  for (let i = 0; i < 2 && file.state === 'PROCESSING'; i++) {
+    await new Promise((r) => setTimeout(r, 2500));
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/${file.name}`, { headers: { 'x-goog-api-key': key } });
     file = (await r.json()) as typeof file;
   }
   if (file.state === 'FAILED') throw new Error('The AI service could not read this file.');
   return {
     part: { fileData: { mimeType: up.fileMime, fileUri: file.uri } },
-    cleanup: async () => {
-      await fetch(`https://generativelanguage.googleapis.com/v1beta/${file.name}`, { method: 'DELETE', headers: { 'x-goog-api-key': key } }).catch(() => {});
-    },
+    // Gemini removes uploaded files by itself after 48 hours; deleting here would cost an extra call.
+    cleanup: none,
   };
 }
 

@@ -1,4 +1,5 @@
 import { handle, HttpError, json, newId, optionsHandler, putMedia, requirePerm } from '@/server/supa';
+import { addMediaBytes } from '@/server/usage';
 
 /** Upload one image of a booklet being published (raw bytes). Returns its public URL. */
 export const OPTIONS = optionsHandler;
@@ -14,5 +15,6 @@ export const POST = handle(async (request) => {
   if (bytes.length > 8 * 1024 * 1024) throw new HttpError(413, 'Image is too large (max 8 MB).');
   const folder = (request.headers.get('x-file-name') || 'booklet').replace(/[^\w-]/g, '').slice(0, 60) || 'booklet';
   const url = await putMedia(`${folder}/${newId()}.${EXT[mime]}`, bytes, mime);
+  await addMediaBytes(bytes.length);
   return json({ url });
 });

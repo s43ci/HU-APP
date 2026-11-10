@@ -11,13 +11,13 @@ import { adm } from './common';
 type Meter = { key: string; label: string; used: number; limit: number; unit: string; pct: number; total?: number };
 type Limits = { aiBudgetUsd: number; hostingRequests: number; storageMb: number; accounts: number; androidMau: number };
 type Report = {
+  needsFold?: boolean;
   meters: Meter[];
   limits: Limits;
   ai: { calls: number; cost: number; inTok: number; outTok: number };
   aiByKind: Record<string, { calls: number; cost: number }>;
   platforms: { web: number; android: number; ios: number };
   daily: { day: string; requests: number; ai: number; aiCalls: number }[];
-  accountsTotal: number;
 };
 
 const LINKS = [
@@ -37,22 +37,32 @@ export function Usage() {
   const [r, setR] = useState<Report | null>(null);
   const [error, setError] = useState('');
 
-  const load = useCallback(() => {
-    adm<Report>('usage')
-      .then((d) => {
-        setR(d);
-        setError('');
-      })
-      .catch((e) => setError((e as Error).message));
-  }, []);
+  const [tick, setTick] = useState(0);
+  const load = useCallback(() => setTick((n) => n + 1), []);
   useEffect(() => {
-    load();
-  }, [load]);
+    let alive = true;
+    // Usage is stored as many tiny records; when there are a lot, tidy them into the monthly summary first.
+    const run = async (i: number): Promise<void> => {
+      const d = await adm<Report>('usage');
+      if (!alive) return;
+      setR(d);
+      setError('');
+      if (d.needsFold && i < 10) {
+        await adm('usage.fold');
+        return run(i + 1);
+      }
+    };
+    run(0).catch((e) => alive && setError((e as Error).message));
+    return () => {
+      alive = false;
+    };
+  }, [tick]);
 
   if (error) return <Txt color="#E5484D">{error}</Txt>;
   if (!r) return <ActivityIndicator color={p.primary} style={{ marginTop: 40 }} />;
 
   const alerts = r.meters.filter((m) => m.pct >= 0.8);
+  const counting = !!r.needsFold;
 
   return (
     <View style={{ gap: 12 }}>
@@ -66,7 +76,10 @@ export function Usage() {
       )}
 
       <Card style={{ padding: 16, gap: 16 }}>
-        <Txt weight="semibold">This month</Txt>
+        <View style={styles.line}>
+          <Txt weight="semibold" style={{ flex: 1 }}>This month</Txt>
+          {counting ? <ActivityIndicator size="small" color={p.primary} /> : null}
+        </View>
         {r.meters.map((m) => (
           <MeterRow key={m.key} m={m} />
         ))}
@@ -100,7 +113,6 @@ export function Usage() {
         <Txt weight="semibold">Active users this month</Txt>
         <View style={styles.line}><Txt muted size={Type.small} style={{ flex: 1 }}>Web app</Txt><Txt weight="medium" size={Type.small}>{r.platforms.web}</Txt></View>
         <View style={styles.line}><Txt muted size={Type.small} style={{ flex: 1 }}>Android app</Txt><Txt weight="medium" size={Type.small}>{r.platforms.android}</Txt></View>
-        <View style={styles.line}><Txt muted size={Type.small} style={{ flex: 1 }}>All accounts</Txt><Txt weight="medium" size={Type.small}>{r.accountsTotal}</Txt></View>
       </Card>
 
       {app.isAdmin ? <LimitsForm limits={r.limits} onSaved={load} /> : null}

@@ -1,13 +1,11 @@
 import {
   finalPrice,
-  getJson,
   getPlans,
   handle,
   HttpError,
   json,
   newId,
   optionsHandler,
-  putJson,
   requireUser,
   updateUser,
   type SubRequest,
@@ -22,15 +20,10 @@ import { countUser } from '@/server/usage';
  */
 export const OPTIONS = optionsHandler;
 
-async function latestRequest(userId: string) {
-  return getJson<SubRequest | null>(`requests/by-user/${userId}.json`, null);
-}
-
 export const GET = handle(async (request) => {
   const account = await requireUser(request);
   await countUser(account.id, request.headers.get('x-platform'));
-  const [plans, req] = await Promise.all([getPlans(), latestRequest(account.id)]);
-  return json({ account, plans, request: req });
+  return json({ account, plans: await getPlans(), request: account.request });
 });
 
 export const PATCH = handle(async (request) => {
@@ -61,9 +54,10 @@ export const POST = handle(async (request) => {
     return json({ account, request: null, activated: true });
   }
 
-  const prev = await latestRequest(me.id);
+  const prev = me.request;
   if (prev?.status === 'pending' && prev.plan === b.plan) return json({ account: me, request: prev });
 
+  // The request lives on the student's own account: no clashes, and the admin reads all of them in one call.
   const req: SubRequest = {
     id: `${now.getTime()}-${newId()}`,
     userId: me.id,
@@ -75,8 +69,6 @@ export const POST = handle(async (request) => {
     status: 'pending',
     createdAt: now.toISOString(),
   };
-  // A replaced pending request is marked as cancelled so the dashboard does not show it twice.
-  if (prev?.status === 'pending') await putJson(`requests/all/${prev.id}.json`, { ...prev, status: 'rejected', note: 'Replaced by a new request' });
-  await Promise.all([putJson(`requests/all/${req.id}.json`, req), putJson(`requests/by-user/${me.id}.json`, req)]);
-  return json({ account: me, request: req });
+  const account = await updateUser(me.id, { app: { request: req } });
+  return json({ account, request: req });
 });
