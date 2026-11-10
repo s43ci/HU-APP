@@ -707,6 +707,7 @@ export const AR: Record<string, string> = {
   'Save limits': 'حفظ الحدود',
   'Saved.': 'تم الحفظ.',
   'AI is paused for the rest of this month (usage limit reached). It comes back automatically next month.': 'الذكاء الاصطناعي متوقف لبقية هذا الشهر بسبب بلوغ حد الاستخدام، ويعود تلقائياً في الشهر القادم.',
+  'Uploaded images (Supabase)': 'الصور المرفوعة (Supabase)',
 };
 
 /** Templates for strings that contain numbers. */
