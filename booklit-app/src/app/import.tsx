@@ -2,7 +2,7 @@ import type { DocumentPickerAsset } from 'expo-document-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { File as FsFile } from 'expo-file-system';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Check, CircleAlert, FilePlus2, FileText, FileUp, Image as ImageIcon, Presentation, RefreshCw, ScrollText, ShieldCheck, Sparkles, X } from 'lucide-react-native';
+import { Check, CircleAlert, FilePlus2, FileText, FileUp, Image as ImageIcon, Presentation, RefreshCw, ScrollText, ShieldCheck, PenLine, Sparkles, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -41,6 +41,7 @@ export default function ImportScreen() {
   const [topicsText, setTopicsText] = useState('');
   const topicsCount = Math.min(40, Math.max(1, Number(topicsText) || 0));
   const [ownPrompt, setOwnPrompt] = useState<string | null>(null);
+  const [promptHeight, setPromptHeight] = useState(240);
 
   useEffect(() => {
     if (state.phase !== 'working') return;
@@ -234,29 +235,35 @@ export default function ImportScreen() {
               ))}
             </View>
 
-            {/* 5. The prompt: the fixed one, or a prompt for this booklet only */}
-            <StepLabel n={personal ? 4 : 5} label="Prompt" done />
-            <View style={[styles.ask, { backgroundColor: p.surface, borderWidth: 1.5, borderColor: ownPrompt !== null ? p.primary : 'transparent' }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Txt weight="semibold" size={Type.small}>{ownPrompt !== null ? tt('Prompt for this booklet only') : tt('Fixed prompt (ENKIDU method)')}</Txt>
-                  <Txt faint size={Type.tiny} style={{ lineHeight: 17 }}>
-                    {ownPrompt !== null ? tt('Used for this booklet only. Other booklets keep the fixed prompt.') : tt('Every booklet uses it unless you change it here.')}
-                  </Txt>
+            {/* 5. The prompt stays hidden: one button shows it for this booklet only */}
+            {ownPrompt === null ? (
+              <Pressable onPress={() => setOwnPrompt(ENKIDU_PROMPT)} style={({ pressed }) => [styles.changePrompt, { borderColor: p.border }, pressed && { opacity: 0.8 }]}>
+                <Icon as={PenLine} size={16} color={p.primary} />
+                <Txt weight="semibold" size={Type.small} color={p.primary}>Change prompt</Txt>
+              </Pressable>
+            ) : (
+              <View style={[styles.ask, { backgroundColor: p.surface, borderWidth: 1.5, borderColor: p.primary, marginTop: 22 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Txt weight="semibold" size={Type.small} style={{ flex: 1 }}>Prompt for this booklet only</Txt>
+                  <Pressable onPress={() => setOwnPrompt(null)} style={[styles.promptBtn, { backgroundColor: p.surfaceAlt }]}>
+                    <Txt weight="semibold" size={Type.tiny}>Cancel</Txt>
+                  </Pressable>
                 </View>
-                <Pressable onPress={() => setOwnPrompt(ownPrompt === null ? ENKIDU_PROMPT : null)} style={[styles.promptBtn, { backgroundColor: ownPrompt !== null ? p.surfaceAlt : p.primarySoft }]}>
-                  <Txt weight="semibold" size={Type.tiny} color={ownPrompt !== null ? p.text : p.primary}>{ownPrompt !== null ? tt('Back to the fixed prompt') : tt('Change prompt')}</Txt>
-                </Pressable>
-              </View>
-              {ownPrompt !== null ? (
                 <TextInput
                   value={ownPrompt}
                   onChangeText={(v) => setOwnPrompt(v.slice(0, 8000))}
                   multiline
-                  style={[styles.instructions, { borderColor: p.border, color: p.text, fontFamily: Font.regular, minHeight: 220, maxHeight: 420 }]}
+                  scrollEnabled={false}
+                  // The box grows with the prompt, so the whole prompt is always visible.
+                  onContentSizeChange={(e) => {
+                    // Web reports the box's full height (padding included); phones report the text only.
+                    const next = Math.max(120, Math.ceil(e.nativeEvent.contentSize.height) + (Platform.OS === 'web' ? 2 : 28));
+                    setPromptHeight((h) => (Math.abs(next - h) > 4 ? next : h));
+                  }}
+                  style={[styles.instructions, { borderColor: p.border, color: p.text, fontFamily: Font.regular, height: promptHeight, lineHeight: 21 }]}
                 />
-              ) : null}
-            </View>
+              </View>
+            )}
           </>
         ) : null}
 
@@ -330,6 +337,7 @@ const styles = StyleSheet.create({
   ask: { borderRadius: 22, padding: 14, gap: 14 },
   number: { width: 64, height: 52, borderWidth: 1.5, borderRadius: 16, textAlign: 'center', fontSize: 20 },
   promptBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 },
+  changePrompt: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 22, paddingVertical: 13, borderRadius: 999, borderWidth: 1, borderStyle: 'dashed' },
   instructions: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14.5, minHeight: 96, textAlignVertical: 'top' },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 10 },
 });
