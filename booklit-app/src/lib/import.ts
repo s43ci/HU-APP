@@ -38,12 +38,8 @@ export type ImportOptions = {
   unlimited?: boolean;
   /** Exact number of topics (empty = follow the file's own sections). */
   topics?: number | null;
-  /** Style of the practice questions. */
-  mcqStyle?: 'ministry' | 'clinical' | 'mixed';
-  /** Free-text instructions for this file only (highest priority). */
-  instructions?: string;
-  /** The admin's standing rules (AI settings). */
-  rules?: { split: string; design: string; mcq: string };
+  /** A prompt for this booklet only (replaces the fixed prompt; the app format is always added). */
+  prompt?: string;
 };
 
 /** JSON -> base64 of its UTF-8 bytes (headers cannot carry Arabic text directly). */
@@ -130,7 +126,7 @@ export async function convertFile(
   const data = await postFile<{ booklet: ServerBooklet; truncated?: boolean }>(
     '/api/import',
     asset,
-    { design: options.design, questionsPerTopic: options.questionsPerTopic },
+    { questionsPerTopic: options.questionsPerTopic, topics: options.topics ?? null, prompt: options.prompt || undefined },
     'upload',
     signal,
     bytes,

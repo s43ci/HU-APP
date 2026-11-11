@@ -2,20 +2,19 @@ import type { DocumentPickerAsset } from 'expo-document-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { File as FsFile } from 'expo-file-system';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Check, CircleAlert, FilePlus2, FileText, FileUp, Image as ImageIcon, Presentation, RefreshCw, ScrollText, ShieldCheck, Sparkles, Wand2, X } from 'lucide-react-native';
+import { Check, CircleAlert, FilePlus2, FileText, FileUp, Image as ImageIcon, Presentation, RefreshCw, ScrollText, ShieldCheck, Sparkles, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Chip, EmptyState, Heading, Icon, SubjectThumb, TopBar, Txt } from '@/components/ui';
 import { Font, Type } from '@/constants/theme';
-import { t as tt } from '@/i18n';
+import { IS_AR, t as tt } from '@/i18n';
 import { allCourseSubjects, stageName, UPLOADS_SUBJECT } from '@/data/content';
 import { newBlankBooklet } from '@/lib/editor';
 import { ACCEPTED_TYPES, convertFile, MAX_UPLOAD_MB, type ImportOptions } from '@/lib/import';
 import { log } from '@/lib/log';
-import { BookletPrompts } from '@/components/booklet-prompts';
-import type { AiRules } from '@/data/types';
+import { ENKIDU_PROMPT } from '@/server/prompt';
 import { useApp } from '@/store/app-store';
 
 const STEPS = ['Uploading your file', 'Reading every page', 'Designing the booklet', 'Writing questions for each topic', 'Placing images', 'Almost done'];
@@ -38,8 +37,10 @@ export default function ImportScreen() {
   const [opts, setOpts] = useState<ImportOptions>({ design: 'enhanced', questionsPerTopic: 5, subjectId: UPLOADS_SUBJECT.id });
   const [state, setState] = useState<{ phase: 'idle' | 'working' | 'error'; error?: string; step: number }>({ phase: 'idle', step: 0 });
   const abort = useRef<AbortController | null>(null);
-  // This booklet's own prompts (null = use the unified prompts from AI settings).
-  const [prompts, setPrompts] = useState<AiRules | null>(null);
+  // Number of topics (empty = like the file) and this booklet's own prompt (null = the fixed prompt).
+  const [topicsText, setTopicsText] = useState('');
+  const topicsCount = Math.min(40, Math.max(1, Number(topicsText) || 0));
+  const [ownPrompt, setOwnPrompt] = useState<string | null>(null);
 
   useEffect(() => {
     if (state.phase !== 'working') return;
@@ -110,7 +111,7 @@ export default function ImportScreen() {
     abort.current = new AbortController();
     const timer = setTimeout(() => abort.current?.abort(), 5 * 60 * 1000);
     try {
-      const { booklet } = await convertFile(file, { ...opts, subjectId: personal ? UPLOADS_SUBJECT.id : opts.subjectId, unlimited: app.canUpload, rules: prompts ?? app.catalog.ai }, abort.current.signal, (stage) => {
+      const { booklet } = await convertFile(file, { ...opts, subjectId: personal ? UPLOADS_SUBJECT.id : opts.subjectId, unlimited: app.canUpload, topics: topicsText ? topicsCount : null, prompt: ownPrompt !== null && ownPrompt.trim() && ownPrompt.trim() !== ENKIDU_PROMPT.trim() ? ownPrompt : undefined }, abort.current.signal, (stage) => {
         if (stage === 'images') setState((st) => ({ ...st, step: Math.max(st.step, 4) }));
       });
       app.addImported(booklet);
@@ -207,23 +208,22 @@ export default function ImportScreen() {
             </ScrollView>
             </>)}
 
-            {/* 3. Design */}
-            <StepLabel n={personal ? 2 : 3} label="How should it look?" done />
-            <View style={{ gap: 8 }}>
-              <Choice
-                on={opts.design === 'enhanced'}
-                icon={Wand2}
-                title="AI design (recommended)"
-                text="Same text, designed for studying: clear sections, lists and tables, exam tips and a key-points summary for every topic."
-                onPress={() => setOpts({ ...opts, design: 'enhanced' })}
-              />
-              <Choice
-                on={opts.design === 'original'}
-                icon={FileText}
-                title="Keep the original layout"
-                text="Text, lists and tables exactly as they are in the file."
-                onPress={() => setOpts({ ...opts, design: 'original' })}
-              />
+            {/* 3. Number of topics */}
+            <StepLabel n={personal ? 2 : 3} label="Number of topics" done />
+            <View style={[styles.ask, { backgroundColor: p.surface }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <TextInput
+                  value={topicsText}
+                  onChangeText={(v) => setTopicsText(v.replace(/[^0-9]/g, '').slice(0, 2))}
+                  keyboardType="number-pad"
+                  placeholder="—"
+                  placeholderTextColor={p.textFaint}
+                  style={[styles.number, { borderColor: topicsText ? p.primary : p.border, color: p.text, fontFamily: Font.semibold }]}
+                />
+                <Txt muted size={Type.small} style={{ flex: 1, lineHeight: 19 }}>
+                  {topicsText ? (IS_AR ? `ستكون الملزمة ${topicsCount} مواضيع بالضبط.` : `The booklet will have exactly ${topicsCount} topics.`) : tt('Leave empty to follow the sections of the file.')}
+                </Txt>
+              </View>
             </View>
 
             {/* 4. Questions */}
@@ -234,30 +234,28 @@ export default function ImportScreen() {
               ))}
             </View>
 
-            {/* 5. A few questions from the AI, so the booklet comes out the way you want */}
-            <StepLabel n={personal ? 4 : 5} label="Tell the AI what you want" done />
-            <View style={[styles.ask, { backgroundColor: p.surface }]}>
-              <AiQuestion q="How many topics?">
-                <Chip label="Like the file" active={!opts.topics} onPress={() => setOpts({ ...opts, topics: null })} />
-                {[4, 6, 8, 10, 12].map((n) => (
-                  <Chip key={n} label={String(n)} active={opts.topics === n} onPress={() => setOpts({ ...opts, topics: n })} />
-                ))}
-              </AiQuestion>
-              <AiQuestion q="What kind of questions?">
-                <Chip label="Ministry style" active={(opts.mcqStyle ?? 'ministry') === 'ministry'} onPress={() => setOpts({ ...opts, mcqStyle: 'ministry' })} />
-                <Chip label="Clinical cases" active={opts.mcqStyle === 'clinical'} onPress={() => setOpts({ ...opts, mcqStyle: 'clinical' })} />
-                <Chip label="Mixed" active={opts.mcqStyle === 'mixed'} onPress={() => setOpts({ ...opts, mcqStyle: 'mixed' })} />
-              </AiQuestion>
-              <Txt weight="medium" size={Type.small} style={{ marginTop: 4 }}>Anything else? Write it like you would tell a person.</Txt>
-              <TextInput
-                value={opts.instructions ?? ''}
-                onChangeText={(v) => setOpts({ ...opts, instructions: v.slice(0, 1500) })}
-                multiline
-                placeholder={tt('e.g. Make 8 topics in this order: 1. Introduction 2. Classification … Put every classification in a table.')}
-                placeholderTextColor={p.textFaint}
-                style={[styles.instructions, { borderColor: p.border, color: p.text, fontFamily: Font.regular }]}
-              />
-              <BookletPrompts value={prompts} onChange={setPrompts} />
+            {/* 5. The prompt: the fixed one, or a prompt for this booklet only */}
+            <StepLabel n={personal ? 4 : 5} label="Prompt" done />
+            <View style={[styles.ask, { backgroundColor: p.surface, borderWidth: 1.5, borderColor: ownPrompt !== null ? p.primary : 'transparent' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Txt weight="semibold" size={Type.small}>{ownPrompt !== null ? tt('Prompt for this booklet only') : tt('Fixed prompt (ENKIDU method)')}</Txt>
+                  <Txt faint size={Type.tiny} style={{ lineHeight: 17 }}>
+                    {ownPrompt !== null ? tt('Used for this booklet only. Other booklets keep the fixed prompt.') : tt('Every booklet uses it unless you change it here.')}
+                  </Txt>
+                </View>
+                <Pressable onPress={() => setOwnPrompt(ownPrompt === null ? ENKIDU_PROMPT : null)} style={[styles.promptBtn, { backgroundColor: ownPrompt !== null ? p.surfaceAlt : p.primarySoft }]}>
+                  <Txt weight="semibold" size={Type.tiny} color={ownPrompt !== null ? p.text : p.primary}>{ownPrompt !== null ? tt('Back to the fixed prompt') : tt('Change prompt')}</Txt>
+                </Pressable>
+              </View>
+              {ownPrompt !== null ? (
+                <TextInput
+                  value={ownPrompt}
+                  onChangeText={(v) => setOwnPrompt(v.slice(0, 8000))}
+                  multiline
+                  style={[styles.instructions, { borderColor: p.border, color: p.text, fontFamily: Font.regular, minHeight: 220, maxHeight: 420 }]}
+                />
+              ) : null}
             </View>
           </>
         ) : null}
@@ -299,21 +297,6 @@ export default function ImportScreen() {
   );
 }
 
-function AiQuestion({ q, children }: { q: string; children: React.ReactNode }) {
-  const { palette: p } = useApp();
-  return (
-    <View style={{ gap: 8 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <View style={[styles.aiDot, { backgroundColor: p.primarySoft }]}>
-          <Icon as={Sparkles} size={12} color={p.primary} />
-        </View>
-        <Txt weight="medium" size={Type.small}>{q}</Txt>
-      </View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{children}</View>
-    </View>
-  );
-}
-
 function StepLabel({ n, label, done }: { n: number; label: string; done?: boolean }) {
   const { palette: p } = useApp();
   return (
@@ -323,22 +306,6 @@ function StepLabel({ n, label, done }: { n: number; label: string; done?: boolea
       </View>
       <Txt weight="semibold">{label}</Txt>
     </View>
-  );
-}
-
-function Choice({ on, icon, title, text, onPress }: { on: boolean; icon: Parameters<typeof Icon>[0]['as']; title: string; text: string; onPress: () => void }) {
-  const { palette: p } = useApp();
-  return (
-    <Pressable onPress={onPress} style={[styles.choice, { backgroundColor: p.surface, borderColor: on ? p.primary : 'transparent' }]}>
-      <View style={[styles.fileIcon, { backgroundColor: on ? p.primary : p.primarySoft }]}>
-        <Icon as={icon} size={18} color={on ? '#fff' : p.primary} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Txt weight="semibold" size={Type.small}>{title}</Txt>
-        <Txt muted size={Type.tiny} style={{ lineHeight: 17, marginTop: 2 }}>{text}</Txt>
-      </View>
-      <View style={[styles.radio, { borderColor: on ? p.primary : p.border }]}>{on ? <View style={[styles.radioDot, { backgroundColor: p.primary }]} /> : null}</View>
-    </Pressable>
   );
 }
 
@@ -361,7 +328,8 @@ const styles = StyleSheet.create({
   dot: { width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
   error: { flexDirection: 'row', gap: 10, padding: 14, borderRadius: 18, marginTop: 18 },
   ask: { borderRadius: 22, padding: 14, gap: 14 },
-  aiDot: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  number: { width: 64, height: 52, borderWidth: 1.5, borderRadius: 16, textAlign: 'center', fontSize: 20 },
+  promptBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 },
   instructions: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14.5, minHeight: 96, textAlignVertical: 'top' },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 10 },
 });

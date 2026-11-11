@@ -2,7 +2,7 @@ import { Directory, File as FsFile, Paths } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { Platform } from 'react-native';
 
-import { getCatalog, topicPlainText } from '@/data/content';
+import { topicPlainText } from '@/data/content';
 import type { ContentBlock, ImportedBooklet, Mcq, Topic } from '@/data/types';
 import { API_BASE } from './ai';
 import { deleteImages, persistWebImage } from './image-store';
@@ -37,7 +37,7 @@ export async function generateMcqs(topic: Topic, existing: Mcq[], count = 5): Pr
   await consume('mcq');
   const out = await post<{ mcqs: Omit<Mcq, 'id' | 'topicId' | 'source'>[] }>(
     '/api/mcq',
-    { topic: topic.title, text: topicPlainText(topic), count, avoid: existing.map((q) => q.question), rules: getCatalog().ai.mcq },
+    { topic: topic.title, text: topicPlainText(topic), count, avoid: existing.map((q) => q.question) },
     'editor-mcq',
   );
   return out.mcqs.map((q) => ({ ...q, id: newId(`${topic.id}--q`), topicId: topic.id, source: 'generated' as const }));

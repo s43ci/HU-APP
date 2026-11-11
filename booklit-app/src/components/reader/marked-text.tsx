@@ -1,6 +1,7 @@
 import { useRef, useState, type ComponentRef } from 'react';
 import { Platform, StyleSheet, Text, View, type GestureResponderEvent, type StyleProp, type TextStyle } from 'react-native';
 
+import { Font } from '@/constants/theme';
 import { HIGHLIGHT_COLORS, type Mark } from '@/data/annotations';
 import { withAlpha } from '../ui';
 
@@ -14,9 +15,28 @@ export function tokenize(text: string) {
 export function wordsOf(text: string, start: number, end: number) {
   return tokenize(text)
     .filter((x) => x.w >= start && x.w <= end)
-    .map((x) => x.t)
+    .map((x) => x.t.replace(/\*\*/g, ''))
     .join(' ');
 }
+
+/**
+ * Key words are marked **like this** by the AI. Which words are bold (by word number), and the
+ * word without the asterisks. Word numbers stay the same, so highlights and notes keep working.
+ */
+export function boldWords(tokens: { t: string; w: number }[]) {
+  const bold = new Set<number>();
+  let on = false;
+  for (const tk of tokens) {
+    if (tk.w < 0) continue;
+    const opens = /^[^\p{L}\p{N}]*\*\*/u.test(tk.t);
+    const closes = /\*\*[^\p{L}\p{N}]*$/u.test(tk.t) && (!opens || tk.t.replace(/\*\*/, '').includes('**'));
+    if (opens) on = true;
+    if (on) bold.add(tk.w);
+    if (closes) on = false;
+  }
+  return bold;
+}
+export const plainWord = (t: string) => t.replace(/\*\*/g, '');
 
 export type Selection = { block: number; item?: number; a: number; b: number };
 
@@ -56,6 +76,7 @@ export function MarkedText(props: Props) {
 
 function PlainMarked({ text, block, item, marks, selection, selectedMarkId, accent, dark, style, tapToSelect, onWord, onMark }: Props) {
   const tokens = tokenize(text);
+  const bold = boldWords(tokens);
   const mine = marks.filter((m) => m.block === block && (m.item ?? -1) === (item ?? -1));
   const markAt = (w: number) => {
     for (let i = mine.length - 1; i >= 0; i--) if (w >= mine[i].start && w <= mine[i].end) return mine[i];
@@ -86,8 +107,8 @@ function PlainMarked({ text, block, item, marks, selection, selectedMarkId, acce
             suppressHighlighting
             onPress={m && !sel ? () => onMark(m) : tapToSelect ? () => onWord(tk.w, false) : undefined}
             onLongPress={() => (m && !sel ? onMark(m) : onWord(tk.w, true))}
-            style={[bg ? { backgroundColor: bg } : null, isSelectedMark ? { textDecorationLine: 'underline', textDecorationColor: accent } : null]}>
-            {tk.t}
+            style={[bg ? { backgroundColor: bg } : null, bold.has(tk.w) ? { fontFamily: Font.semibold } : null, isSelectedMark ? { textDecorationLine: 'underline', textDecorationColor: accent } : null]}>
+            {plainWord(tk.t)}
             {noteAfter ? <Text style={{ color: accent, fontSize: 11 }}>{' ✎'}</Text> : null}
           </Text>
         );
@@ -107,6 +128,7 @@ const LAYOUT_KEYS = ['margin', 'marginTop', 'marginBottom', 'marginLeft', 'margi
  */
 function PaintFlow({ text, block, item, marks, dark, style, onMark, paint, selection, accent }: Props & { paint: Paint }) {
   const tokens = tokenize(text).filter((t) => t.w >= 0);
+  const bold = boldWords(tokens);
   const mine = marks.filter((m) => m.block === block && (m.item ?? -1) === (item ?? -1));
   const markAt = (w: number) => {
     for (let i = mine.length - 1; i >= 0; i--) if (w >= mine[i].start && w <= mine[i].end) return mine[i];
@@ -220,7 +242,7 @@ function PaintFlow({ text, block, item, marks, dark, style, onMark, paint, selec
               g.current.rects[tk.w] = { x: l.x, y: l.y, w: l.width, h: l.height };
             }}
             style={[{ backgroundColor: bg, borderRadius: 3 }, last ? null : joined ? { paddingEnd: space, borderTopEndRadius: 0, borderBottomEndRadius: 0 } : { marginEnd: space }, i > 0 && bg && bgOf(tokens[i - 1].w) === bg ? { borderTopStartRadius: 0, borderBottomStartRadius: 0 } : null]}>
-            <Text style={inner}>{tk.t}</Text>
+            <Text style={[inner, bold.has(tk.w) ? { fontFamily: Font.semibold } : null]}>{plainWord(tk.t)}</Text>
           </View>
         );
       })}

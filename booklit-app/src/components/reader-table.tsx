@@ -100,7 +100,7 @@ function Row({ cells, widths, header, zebra, theme, accent, fs }: { cells: strin
               c > 0 && { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: rt.border },
               isRtl(text) && { writingDirection: 'rtl', textAlign: 'right' },
             ]}>
-            {text}
+            {text.includes('**') ? text.split('**').map((seg, i) => (i % 2 ? <Text key={i} style={{ fontFamily: Font.semibold }}>{seg}</Text> : seg)) : text}
           </Text>
         );
       })}
