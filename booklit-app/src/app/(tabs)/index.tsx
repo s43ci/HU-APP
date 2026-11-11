@@ -6,9 +6,10 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { InstallApp } from '@/components/install-app';
 import { ArrowCircle, Card, CircleButton, Heading, Icon, Page, ProgressBar, SectionTitle, SubjectThumb, Txt } from '@/components/ui';
 import { Type } from '@/constants/theme';
-import { booklets, getBooklet, getSubject, getTopic, topicsOf } from '@/data/content';
+import { booklets, courseSubjects, getBooklet, getSubject, getTopic, topicsOf } from '@/data/content';
 import { bookletProgress, greeting, initials, isSubjectUnlocked, startedBooklets } from '@/lib/progress';
 import { useApp } from '@/store/app-store';
+import { UniversityPicker } from '@/components/university-picker';
 
 export default function Home() {
   'use no memo'; // reads the shared content lists, which change when booklets are published or deleted
@@ -28,7 +29,7 @@ export default function Home() {
   );
   const suggested = booklets.filter((b) => {
     const s = getSubject(b.subjectId);
-    return s && s.id !== 'uploads' && isSubjectUnlocked(s.id, app.unlockedSubjects) && s.stageId === profile?.stageId && b.order === 1;
+    return s && s.id !== 'uploads' && courseSubjects().some((x) => x.id === s.id) && isSubjectUnlocked(s.id, app.unlockedSubjects) && s.stageId === profile?.stageId && b.order === 1;
   });
   const list = (started.length ? started : suggested).slice(0, 4);
 
@@ -60,6 +61,9 @@ export default function Home() {
 
       <View style={{ marginTop: 22 }}>
         <Heading light="Ready to" strong="study today?" />
+      </View>
+      <View style={{ marginTop: 12, flexDirection: 'row' }}>
+        <UniversityPicker compact />
       </View>
 
       {/* Search + quick actions */}

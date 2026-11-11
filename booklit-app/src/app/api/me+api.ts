@@ -28,7 +28,7 @@ export const GET = handle(async (request) => {
 
 export const PATCH = handle(async (request) => {
   const me = await requireUser(request);
-  const b = (await request.json().catch(() => ({}))) as { name?: string; stageId?: string };
+  const b = (await request.json().catch(() => ({}))) as { name?: string; stageId?: string; universityId?: string };
   const meta: Record<string, string> = {};
   if (b.name !== undefined) {
     const name = b.name.trim().slice(0, 60);
@@ -36,6 +36,7 @@ export const PATCH = handle(async (request) => {
     meta.name = name;
   }
   if (b.stageId && /^stage[1-5]$/.test(b.stageId)) meta.stageId = b.stageId;
+  if (typeof b.universityId === 'string') meta.universityId = b.universityId.replace(/[^\w-]/g, '').slice(0, 60);
   return json({ account: await updateUser(me.id, { meta }) });
 });
 

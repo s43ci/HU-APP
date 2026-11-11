@@ -99,6 +99,7 @@ export type Account = {
   blocked: boolean;
   createdAt: string;
   lastSignIn: string | null;
+  universityId?: string | null;
 };
 export type PlanConfig = {
   currency: string;

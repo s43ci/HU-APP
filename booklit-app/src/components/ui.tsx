@@ -21,6 +21,7 @@ import { Font, Radius, TAB_BAR_SPACE, Type } from '@/constants/theme';
 import { IS_AR, t } from '@/i18n';
 import { subjectVisual } from '@/lib/subject-visuals';
 import { usePalette } from '@/store/app-store';
+import { getSubject } from '@/data/content';
 
 export type { LucideIcon };
 
@@ -226,13 +227,14 @@ export function SectionTitle({ title, action, onAction }: { title: string; actio
 export function SubjectThumb({ subjectId, size, width, height, radius = 16, locked }: { subjectId: string; size?: number; width?: number | `${number}%`; height?: number; radius?: number; locked?: boolean }) {
   const p = usePalette();
   const v = subjectVisual(subjectId);
+  const custom = getSubject(subjectId)?.image;
   const w = width ?? size ?? 56;
   const h = height ?? size ?? 56;
   const iconSize = Math.min(typeof w === 'number' ? w : h, h) * 0.36;
   return (
     <View style={{ width: w, height: h, borderRadius: radius, overflow: 'hidden', backgroundColor: p.primarySoft }}>
-      {v.image ? (
-        <Image source={v.image} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+      {custom || v.image ? (
+        <Image source={custom ? { uri: custom } : v.image} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
       ) : (
         <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
           <Icon as={v.icon} size={iconSize} color={p.primary} stroke={1.4} />

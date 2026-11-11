@@ -9,12 +9,14 @@ import { Requests } from '@/components/admin/requests';
 import { Staff } from '@/components/admin/staff';
 import { Students } from '@/components/admin/students';
 import { Subjects } from '@/components/admin/subjects';
+import { Universities } from '@/components/admin/universities';
+import { AiSettings } from '@/components/admin/ai-settings';
 import { Usage } from '@/components/admin/usage';
 import { Chip, TopBar, Txt } from '@/components/ui';
 import { Type } from '@/constants/theme';
 import { useApp } from '@/store/app-store';
 
-type Tab = 'overview' | 'usage' | 'requests' | 'students' | 'pricing' | 'subjects' | 'staff';
+type Tab = 'overview' | 'usage' | 'requests' | 'students' | 'pricing' | 'subjects' | 'universities' | 'ai' | 'staff';
 
 /** Admin & moderator dashboard. Each section shows only for the permissions this account has. */
 export default function AdminDashboard() {
@@ -33,6 +35,8 @@ export default function AdminDashboard() {
     { key: 'students', label: 'Students', show: app.can('students') },
     { key: 'pricing', label: 'Prices', show: true },
     { key: 'subjects', label: 'Subjects', show: true },
+    { key: 'universities', label: 'Universities', show: true },
+    { key: 'ai', label: 'AI settings', show: app.canUpload },
     { key: 'staff', label: 'Moderators', show: app.isAdmin },
   ];
 
@@ -60,6 +64,8 @@ export default function AdminDashboard() {
         {tab === 'students' ? <Students /> : null}
         {tab === 'pricing' ? <Pricing /> : null}
         {tab === 'subjects' ? <Subjects /> : null}
+        {tab === 'universities' ? <Universities /> : null}
+        {tab === 'ai' ? <AiSettings /> : null}
         {tab === 'staff' ? <Staff /> : null}
       </ScrollView>
     </View>

@@ -36,7 +36,23 @@ export type ImportOptions = {
   subjectId?: string;
   /** Admin uploads are not counted against the daily allowance. */
   unlimited?: boolean;
+  /** Exact number of topics (empty = follow the file's own sections). */
+  topics?: number | null;
+  /** Style of the practice questions. */
+  mcqStyle?: 'ministry' | 'clinical' | 'mixed';
+  /** Free-text instructions for this file only (highest priority). */
+  instructions?: string;
+  /** The admin's standing rules (AI settings). */
+  rules?: { split: string; design: string; mcq: string };
 };
+
+/** JSON -> base64 of its UTF-8 bytes (headers cannot carry Arabic text directly). */
+function b64json(v: unknown) {
+  const bytes = new TextEncoder().encode(JSON.stringify(v));
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
 
 /** Read the picked file into memory (web: the File object; iOS/Android: from disk). */
 export async function readAssetBytes(asset: DocumentPickerAsset): Promise<Uint8Array> {
@@ -65,7 +81,7 @@ export async function postFile<T>(path: string, asset: DocumentPickerAsset, opti
     'Content-Type': 'application/octet-stream',
     'X-File-Name': encodeURIComponent(asset.name),
     'X-File-Type': encodeURIComponent(asset.mimeType ?? ''),
-    'X-Options': encodeURIComponent(JSON.stringify(options)),
+    'X-Options-B64': b64json(options),
   };
   let res: Response;
   try {

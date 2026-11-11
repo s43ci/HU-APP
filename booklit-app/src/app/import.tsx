@@ -4,12 +4,13 @@ import { File as FsFile } from 'expo-file-system';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Check, CircleAlert, FilePlus2, FileText, FileUp, Image as ImageIcon, Presentation, RefreshCw, ScrollText, ShieldCheck, Sparkles, Wand2, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Chip, EmptyState, Heading, Icon, SubjectThumb, TopBar, Txt } from '@/components/ui';
-import { Type } from '@/constants/theme';
-import { courseSubjects, stageName, UPLOADS_SUBJECT } from '@/data/content';
+import { Font, Type } from '@/constants/theme';
+import { t as tt } from '@/i18n';
+import { allCourseSubjects, stageName, UPLOADS_SUBJECT } from '@/data/content';
 import { newBlankBooklet } from '@/lib/editor';
 import { ACCEPTED_TYPES, convertFile, MAX_UPLOAD_MB, type ImportOptions } from '@/lib/import';
 import { log } from '@/lib/log';
@@ -105,7 +106,7 @@ export default function ImportScreen() {
     abort.current = new AbortController();
     const timer = setTimeout(() => abort.current?.abort(), 5 * 60 * 1000);
     try {
-      const { booklet } = await convertFile(file, { ...opts, subjectId: personal ? UPLOADS_SUBJECT.id : opts.subjectId, unlimited: app.canUpload }, abort.current.signal, (stage) => {
+      const { booklet } = await convertFile(file, { ...opts, subjectId: personal ? UPLOADS_SUBJECT.id : opts.subjectId, unlimited: app.canUpload, rules: app.catalog.ai }, abort.current.signal, (stage) => {
         if (stage === 'images') setState((st) => ({ ...st, step: Math.max(st.step, 4) }));
       });
       app.addImported(booklet);
@@ -119,7 +120,7 @@ export default function ImportScreen() {
     }
   };
 
-  const subjects = [UPLOADS_SUBJECT, ...courseSubjects()];
+  const subjects = [UPLOADS_SUBJECT, ...allCourseSubjects()];
   const working = state.phase === 'working';
 
   return (
@@ -228,6 +229,34 @@ export default function ImportScreen() {
                 <Chip key={n} label={`${n} questions`} active={opts.questionsPerTopic === n} onPress={() => setOpts({ ...opts, questionsPerTopic: n })} />
               ))}
             </View>
+
+            {/* 5. A few questions from the AI, so the booklet comes out the way you want */}
+            <StepLabel n={personal ? 4 : 5} label="Tell the AI what you want" done />
+            <View style={[styles.ask, { backgroundColor: p.surface }]}>
+              <AiQuestion q="How many topics?">
+                <Chip label="Like the file" active={!opts.topics} onPress={() => setOpts({ ...opts, topics: null })} />
+                {[4, 6, 8, 10, 12].map((n) => (
+                  <Chip key={n} label={String(n)} active={opts.topics === n} onPress={() => setOpts({ ...opts, topics: n })} />
+                ))}
+              </AiQuestion>
+              <AiQuestion q="What kind of questions?">
+                <Chip label="Ministry style" active={(opts.mcqStyle ?? 'ministry') === 'ministry'} onPress={() => setOpts({ ...opts, mcqStyle: 'ministry' })} />
+                <Chip label="Clinical cases" active={opts.mcqStyle === 'clinical'} onPress={() => setOpts({ ...opts, mcqStyle: 'clinical' })} />
+                <Chip label="Mixed" active={opts.mcqStyle === 'mixed'} onPress={() => setOpts({ ...opts, mcqStyle: 'mixed' })} />
+              </AiQuestion>
+              <Txt weight="medium" size={Type.small} style={{ marginTop: 4 }}>Anything else? Write it like you would tell a person.</Txt>
+              <TextInput
+                value={opts.instructions ?? ''}
+                onChangeText={(v) => setOpts({ ...opts, instructions: v.slice(0, 1500) })}
+                multiline
+                placeholder={tt('e.g. Make 8 topics in this order: 1. Introduction 2. Classification … Put every classification in a table.')}
+                placeholderTextColor={p.textFaint}
+                style={[styles.instructions, { borderColor: p.border, color: p.text, fontFamily: Font.regular }]}
+              />
+              {app.canUpload && (app.catalog.ai.split || app.catalog.ai.design || app.catalog.ai.mcq) ? (
+                <Txt faint size={Type.tiny}>Your saved AI rules are applied too (Admin dashboard → AI settings).</Txt>
+              ) : null}
+            </View>
           </>
         ) : null}
 
@@ -264,6 +293,21 @@ export default function ImportScreen() {
           <Button label={file ? 'Build booklet with AI' : 'Choose a file first'} icon={Sparkles} variant="primary" disabled={!file} onPress={build} />
         </View>
       ) : null}
+    </View>
+  );
+}
+
+function AiQuestion({ q, children }: { q: string; children: React.ReactNode }) {
+  const { palette: p } = useApp();
+  return (
+    <View style={{ gap: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={[styles.aiDot, { backgroundColor: p.primarySoft }]}>
+          <Icon as={Sparkles} size={12} color={p.primary} />
+        </View>
+        <Txt weight="medium" size={Type.small}>{q}</Txt>
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{children}</View>
     </View>
   );
 }
@@ -314,5 +358,8 @@ const styles = StyleSheet.create({
   step: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   dot: { width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
   error: { flexDirection: 'row', gap: 10, padding: 14, borderRadius: 18, marginTop: 18 },
+  ask: { borderRadius: 22, padding: 14, gap: 14 },
+  aiDot: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  instructions: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14.5, minHeight: 96, textAlignVertical: 'top' },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 10 },
 });

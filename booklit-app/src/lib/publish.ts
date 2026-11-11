@@ -5,7 +5,7 @@ import { readImage } from './image-store';
 
 const isRemote = (u: string) => /^https?:\/\//.test(u);
 
-async function uploadImage(uri: string, bookletId: string): Promise<string> {
+export async function uploadImage(uri: string, bookletId: string): Promise<string> {
   const { bytes, mime } = await readImage(uri);
   const res = await fetch(`${API_BASE}/api/media`, {
     method: 'POST',

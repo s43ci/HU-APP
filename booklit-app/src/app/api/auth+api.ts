@@ -4,7 +4,7 @@ import { createUser, handle, HttpError, json, optionsHandler, sbJson, sbPublic, 
  * Accounts: { action: 'signup' | 'login' | 'refresh' | 'password', ... }
  * Returns { session: { access, refresh, expiresAt }, account }.
  */
-type Body = { action?: string; email?: string; password?: string; name?: string; stageId?: string; refresh?: string; current?: string; next?: string };
+type Body = { action?: string; email?: string; password?: string; name?: string; stageId?: string; universityId?: string; refresh?: string; current?: string; next?: string };
 type Token = { access_token: string; refresh_token: string; expires_in: number; user: Parameters<typeof toAccount>[0] };
 
 const STAGES = ['stage1', 'stage2', 'stage3', 'stage4', 'stage5'];
@@ -36,7 +36,8 @@ export const POST = handle(async (request) => {
       if (!emailOk(email)) throw new HttpError(400, 'Please enter a valid email.');
       if (password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters.');
       const stageId = STAGES.includes(b.stageId ?? '') ? b.stageId! : 'stage5';
-      await createUser(email, password, { name, stageId }, { kind: 'student', plan: 'free' });
+      const universityId = (b.universityId ?? '').replace(/[^\w-]/g, '').slice(0, 60);
+      await createUser(email, password, { name, stageId, universityId }, { kind: 'student', plan: 'free' });
       return json(session(await passwordLogin(email, password)));
     }
     case 'login': {

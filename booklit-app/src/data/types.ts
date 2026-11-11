@@ -11,7 +11,29 @@ export type Subject = {
   icon: string; // MaterialCommunityIcons name
   isFree: boolean;
   description: string;
+  /** Picture uploaded by the admin (subjects added from the dashboard). */
+  image?: string;
+  /** Added from the admin dashboard (not built into the app). */
+  custom?: boolean;
 };
+
+/** A university and the subjects it teaches in each stage (a stage left out = all subjects of that stage). */
+export type University = { id: string; name: string; subjects: Partial<Record<StageId, string[]>> };
+
+/** Rules the admin gives the AI for every file it converts (empty = the built-in behaviour). */
+export type AiRules = { split: string; design: string; mcq: string };
+
+/** Catalog set by the admin from the dashboard, shared with every student. */
+export type Catalog = {
+  subjects: Subject[];
+  hiddenSubjects: string[];
+  /** subject id -> booklet ids in the order the admin chose. */
+  order: Record<string, string[]>;
+  universities: University[];
+  ai: AiRules;
+};
+
+export const EMPTY_CATALOG: Catalog = { subjects: [], hiddenSubjects: [], order: {}, universities: [], ai: { split: '', design: '', mcq: '' } };
 
 export type Booklet = {
   id: string;

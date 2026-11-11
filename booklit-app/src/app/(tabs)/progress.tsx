@@ -6,7 +6,7 @@ import Svg, { Circle } from 'react-native-svg';
 
 import { Card, Heading, Icon, Page, ProgressBar, SectionTitle, SubjectThumb, Txt, TabHeader } from '@/components/ui';
 import { Type } from '@/constants/theme';
-import { booklets, bookletsOf, subjects, topicsOf } from '@/data/content';
+import { booklets, bookletsOf, courseSubjects, topicsOf } from '@/data/content';
 import { bookletProgress, isSubjectUnlocked, subjectProgress } from '@/lib/progress';
 import { useApp } from '@/store/app-store';
 
@@ -17,7 +17,7 @@ export default function Progress() {
   const [open, setOpen] = useState<string | null>(null);
   const [all, setAll] = useState(false);
 
-  const available = subjects.filter((s) => isSubjectUnlocked(s.id, app.unlockedSubjects) && bookletsOf(s.id).length);
+  const available = courseSubjects().filter((s) => isSubjectUnlocked(s.id, app.unlockedSubjects) && bookletsOf(s.id).length);
   const availableBooklets = booklets.filter((b) => available.some((s) => s.id === b.subjectId));
   const completedBooklets = availableBooklets.filter((b) => {
     const ts = topicsOf(b.id);

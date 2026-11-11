@@ -14,7 +14,7 @@ type Body = { subject?: string; booklet?: string; topic?: string; topicText?: st
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-File-Name, X-File-Type, X-Options, X-Platform',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-File-Name, X-File-Type, X-Options, X-Options-B64, X-Platform',
 };
 
 const SYSTEM = `You are BOOKLIT's study assistant for dental students in Iraq.

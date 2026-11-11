@@ -10,6 +10,7 @@ import { bookletsOf, courseSubjects, stages, topicsOf, topicsOfSubject, UPLOADS_
 import type { StageId, Subject } from '@/data/types';
 import { isSubjectUnlocked } from '@/lib/progress';
 import { accessOf, useApp } from '@/store/app-store';
+import { UniversityPicker } from '@/components/university-picker';
 
 type StageFilter = 'all' | StageId;
 
@@ -44,6 +45,10 @@ export default function Library() {
           <Heading light="Find your" strong="next booklet." />
         </View>
         <CircleButton icon={Search} label="Search" size={52} onPress={() => router.push('/search')} />
+      </View>
+
+      <View style={{ marginTop: 14, flexDirection: 'row' }}>
+        <UniversityPicker compact />
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} style={{ marginHorizontal: -20 }}>

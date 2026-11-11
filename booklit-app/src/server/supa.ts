@@ -34,6 +34,7 @@ export type Account = {
   request: SubRequest | null;
   /** Total approved payments. */
   paidTotal: number;
+  universityId: string | null;
 };
 
 export type PlanConfig = {
@@ -126,7 +127,7 @@ type SbUser = {
   email?: string;
   created_at: string;
   last_sign_in_at?: string | null;
-  user_metadata?: { name?: string; stageId?: string };
+  user_metadata?: { name?: string; stageId?: string; universityId?: string };
   app_metadata?: { kind?: Kind; plan?: Plan; planUntil?: string | null; perms?: Perm[]; blocked?: boolean; request?: SubRequest | null; paidTotal?: number };
 };
 
@@ -149,6 +150,7 @@ export function toAccount(u: SbUser): Account {
     lastSignIn: u.last_sign_in_at ?? null,
     request: am.request ?? null,
     paidTotal: am.paidTotal ?? 0,
+    universityId: u.user_metadata?.universityId || null,
   };
 }
 

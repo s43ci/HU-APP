@@ -4,7 +4,7 @@
  * Replace with API data in src/lib/api.ts (see docs/plan.md, phase 2).
  */
 import { t } from '@/i18n';
-import type { Booklet, ContentBlock, ImportedBooklet, Mcq, Stage, Subject, Topic } from './types';
+import { EMPTY_CATALOG, type Booklet, type Catalog, type ContentBlock, type ImportedBooklet, type Mcq, type Stage, type Subject, type Topic } from './types';
 
 export const stages: Stage[] = [
   { id: 'stage1', name: 'First Stage' },
@@ -212,10 +212,37 @@ export const UPLOADS_SUBJECT: Subject = {
 subjects.push(UPLOADS_SUBJECT);
 
 /** Course subjects only (excludes "My Uploads"). */
-export const courseSubjects = () => subjects.filter((s) => s.id !== UPLOADS_SUBJECT.id);
+export const courseSubjects = () => subjects.filter((s) => s.id !== UPLOADS_SUBJECT.id && (!allowed || allowed.has(s.id)));
+/** Every course subject, whatever the student's university (for the admin). */
+export const allCourseSubjects = () => subjects.filter((s) => s.id !== UPLOADS_SUBJECT.id);
 
 // Built-in content as shipped, so booklets the admin deleted can be removed and restored.
-const BUILTIN = { booklets: [...booklets], topics: [...topics], mcqs: [...mcqs] };
+const BUILTIN = { booklets: [...booklets], topics: [...topics], mcqs: [...mcqs], subjects: [...subjects] };
+
+let catalog: Catalog = EMPTY_CATALOG;
+/** Subjects of the student's university (null = every subject). */
+let allowed: Set<string> | null = null;
+
+export const getCatalog = () => catalog;
+export const universities = () => catalog.universities;
+export const getUniversity = (id?: string | null) => (id ? catalog.universities.find((u) => u.id === id) : undefined);
+
+/** Subjects a university teaches: the chosen ones per stage, or every subject of a stage it did not set. */
+export function universitySubjects(uniId?: string | null): Set<string> | null {
+  const u = getUniversity(uniId);
+  if (!u) return null;
+  const out = new Set<string>();
+  for (const s of subjects) {
+    const chosen = u.subjects[s.stageId];
+    if (!chosen || chosen.includes(s.id)) out.add(s.id);
+  }
+  return out;
+}
+
+/** Show only the subjects of this university (null = all). Called by the store. */
+export function setUniversity(uniId?: string | null) {
+  allowed = universitySubjects(uniId);
+}
 export const builtinBooklet = (id: string) => BUILTIN.booklets.find((b) => b.id === id);
 
 /** An editable Studio copy of a built-in booklet (same ids, so progress, highlights and notes are kept). */
@@ -246,7 +273,12 @@ let importedIds = new Set<string>();
  * Merge Studio content into the shared arrays (called by the store):
  * uploaded/created booklets (placed in their chosen subject) and MCQs imported from question banks.
  */
-export function setImportedContent(allList: ImportedBooklet[], extra: Mcq[] = [], hiddenIds: string[] = []) {
+export function setImportedContent(allList: ImportedBooklet[], extra: Mcq[] = [], hiddenIds: string[] = [], cat: Catalog = catalog) {
+  // Subjects: built-in ones the admin did not remove, then the ones added from the dashboard.
+  catalog = { ...EMPTY_CATALOG, ...cat, ai: { ...EMPTY_CATALOG.ai, ...cat.ai } };
+  const hiddenSubjects = new Set(catalog.hiddenSubjects);
+  fill(subjects, [...BUILTIN.subjects.filter((x) => !hiddenSubjects.has(x.id)), ...catalog.subjects.filter((x) => !hiddenSubjects.has(x.id)).map((x) => ({ ...x, custom: true }))]);
+
   // Start again from the built-in content without the booklets the admin deleted.
   const hidden = new Set(hiddenIds);
   const list = allList.filter((b) => !hidden.has(b.id));
@@ -276,6 +308,16 @@ export function setImportedContent(allList: ImportedBooklet[], extra: Mcq[] = []
     mcqs.push(...b.mcqs);
   });
   mcqs.push(...extra);
+
+  // Booklet order chosen by the admin (per subject); the rest keep their place after them.
+  const rank = (b: Booklet) => {
+    const list = catalog.order[b.subjectId];
+    const i = list ? list.indexOf(b.id) : -1;
+    return i < 0 ? 10_000 + b.order : i;
+  };
+  const sorted = [...booklets].sort((a, b) => (a.subjectId === b.subjectId ? rank(a) - rank(b) : 0));
+  const counts: Record<string, number> = {};
+  fill(booklets, sorted.map((b) => ({ ...b, order: (counts[b.subjectId] = (counts[b.subjectId] ?? 0) + 1) })));
 }
 
 /** True for booklets made in BOOKLIT Studio (uploaded or created), which can be edited. */

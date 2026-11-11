@@ -3,11 +3,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { AppState, useColorScheme } from 'react-native';
 
 import { DarkPalette, LightPalette, type Palette, type ReaderTheme } from '@/constants/theme';
-import { setImportedContent, subjects } from '@/data/content';
+import { setImportedContent, setUniversity, subjects } from '@/data/content';
 import { api, getSession, onSessionChange, setSession, type Account, type PlanConfig, type Session, type SubRequest } from '@/lib/api';
 import { deleteBookletImages } from '@/lib/editor';
 import { DEFAULT_READER_PREFS, type Mark, type ReaderPrefs, type Role, type Stroke } from '@/data/annotations';
-import type { ImportedBooklet, Mcq, StageId } from '@/data/types';
+import { EMPTY_CATALOG, type Catalog, type ImportedBooklet, type Mcq, type StageId } from '@/data/types';
 
 export type Appearance = 'system' | 'light' | 'dark';
 
@@ -60,6 +60,10 @@ type Persisted = {
   subjectAccess: Record<string, 'free' | 'pro' | 'premium'>;
   /** Booklets the admin deleted for everyone. */
   hiddenBooklets: string[];
+  /** Subjects, booklet order, universities and AI rules set by the admin. */
+  catalog: Catalog;
+  /** The student's university (filters the subjects they see). */
+  universityId: string | null;
 };
 
 const EMPTY_PUBLISHED: Persisted['published'] = { updatedAt: 0, booklets: [], extraMcqs: [], bankMcqs: [], versions: {} };
@@ -98,6 +102,8 @@ const DEFAULTS: Persisted = {
   publishedMeta: {},
   subjectAccess: {},
   hiddenBooklets: [],
+  catalog: EMPTY_CATALOG,
+  universityId: null,
 };
 
 const KEY = 'booklit.state.v1';
@@ -133,11 +139,13 @@ type Store = Persisted & {
   /** Find a Studio / published booklet by id (local copy first). */
   findBooklet: (id: string) => ImportedBooklet | undefined;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (p: { email: string; password: string; name: string; stageId: StageId }) => Promise<void>;
+  signUp: (p: { email: string; password: string; name: string; stageId: StageId; universityId?: string | null }) => Promise<void>;
   /** Re-read the account, plans and published content from the server. */
   sync: () => Promise<void>;
   setAccount: (a: Account, session?: Session) => void;
   setMyRequest: (r: SubRequest | null) => void;
+  /** Switch university (saved on this device at once and on the account in the background). */
+  chooseUniversity: (id: string | null) => void;
   markPublished: (b: ImportedBooklet) => void;
   canEdit: boolean;
   canUpload: boolean;
@@ -218,11 +226,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       const cur = stateRef.current;
       const [me, index] = await Promise.all([
         getSession() ? api<{ account: Account; plans: PlanConfig; request: SubRequest | null }>('/api/me').catch(() => null) : Promise.resolve(null),
-        api<{ updatedAt: number; booklets: { id: string; updatedAt: number }[]; access?: Persisted['subjectAccess']; hidden?: string[] }>('/api/content', { auth: false }).catch(() => null),
+        api<{ updatedAt: number; booklets: { id: string; updatedAt: number }[]; access?: Persisted['subjectAccess']; hidden?: string[]; catalog?: Catalog }>('/api/content', { auth: false }).catch(() => null),
       ]);
       if (me) update(() => ({ account: me.account, plans: me.plans, myRequest: me.request }));
       if (index?.access && JSON.stringify(index.access) !== JSON.stringify(cur.subjectAccess)) update(() => ({ subjectAccess: index.access ?? {} }));
       if (index?.hidden && JSON.stringify(index.hidden) !== JSON.stringify(cur.hiddenBooklets)) update(() => ({ hiddenBooklets: index.hidden ?? [] }));
+      if (index?.catalog && JSON.stringify(index.catalog) !== JSON.stringify(cur.catalog)) update(() => ({ catalog: { ...EMPTY_CATALOG, ...index.catalog } }));
+      // A university chosen on another device follows the account.
+      if (me?.account.universityId && !cur.universityId) update(() => ({ universityId: me.account.universityId ?? null }));
       if (index && index.updatedAt !== cur.published.updatedAt) {
         const old = cur.published;
         const keep = new Map(old.booklets.map((b) => [b.id, b]));
@@ -282,9 +293,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   // Keep the shared content arrays in sync before children render.
   const contentVersion = useMemo(() => {
-    setImportedContent(allBooklets, allExtra, state.hiddenBooklets);
-    return allBooklets.reduce((n, b) => n + (b.updatedAt ?? b.createdAt) % 100000, allBooklets.length * 7 + allExtra.length + state.hiddenBooklets.length * 131);
-  }, [allBooklets, allExtra, state.hiddenBooklets]);
+    setImportedContent(allBooklets, allExtra, state.hiddenBooklets, state.catalog);
+    setUniversity(state.universityId);
+    return allBooklets.reduce((n, b) => n + (b.updatedAt ?? b.createdAt) % 100000, allBooklets.length * 7 + allExtra.length + state.hiddenBooklets.length * 131 + JSON.stringify(state.catalog).length * 17 + (state.universityId?.length ?? 0) * 7919);
+  }, [allBooklets, allExtra, state.hiddenBooklets, state.catalog, state.universityId]);
 
   const isDark = state.appearance === 'dark' || (state.appearance === 'system' && scheme === 'dark');
 
@@ -315,7 +327,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       signUp: async (p) => {
         const r = await api<{ session: Session; account: Account }>('/api/auth', { body: { action: 'signup', ...p }, auth: false });
         setSession(r.session);
-        update(() => ({ session: r.session, account: r.account }));
+        update(() => ({ session: r.session, account: r.account, universityId: p.universityId ?? null }));
         setTimeout(() => void sync(), 50);
       },
       sync,
@@ -324,6 +336,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         update(() => (session ? { account: a, session } : { account: a }));
       },
       setMyRequest: (r) => update(() => ({ myRequest: r })),
+      chooseUniversity: (id) => {
+        update(() => ({ universityId: id }));
+        if (getSession()) void api('/api/me', { method: 'PATCH', body: { universityId: id ?? '' } }).catch(() => {});
+      },
       markPublished: (b) =>
         update((s) => ({
           importedBooklets: s.importedBooklets.map((x) => (x.id === b.id ? b : x)),

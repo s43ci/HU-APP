@@ -15,13 +15,15 @@ import { IS_AR, setLanguage, t as tt } from '@/i18n';
 
 export default function Welcome() {
   const insets = useSafeAreaInsets();
-  const { set, signIn, signUp, palette: p } = useApp();
+  const { set, signIn, signUp, palette: p, catalog } = useApp();
   const [mode, setMode] = useState<'signup' | 'login'>('signup');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [stageId, setStageId] = useState<StageId>('stage5');
+  const [uniId, setUniId] = useState<string | null>(null);
+  const unis = catalog.universities;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -32,7 +34,7 @@ export default function Welcome() {
     setBusy(true);
     setError('');
     try {
-      if (mode === 'signup') await signUp({ email: email.trim(), password, name: name.trim(), stageId });
+      if (mode === 'signup') await signUp({ email: email.trim(), password, name: name.trim(), stageId, universityId: uniId });
       else await signIn(email.trim(), password);
       router.replace('/');
     } catch (e) {
@@ -101,6 +103,16 @@ export default function Welcome() {
                   <Chip key={s.id} label={s.name} active={stageId === s.id} onPress={() => setStageId(s.id)} />
                 ))}
               </View>
+              {unis.length ? (
+                <>
+                  <Txt weight="medium" size={Type.tiny} muted style={{ marginStart: 4, marginTop: 4 }}>University</Txt>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {unis.map((u) => (
+                      <Chip key={u.id} label={u.name} active={uniId === u.id} onPress={() => setUniId(uniId === u.id ? null : u.id)} />
+                    ))}
+                  </View>
+                </>
+              ) : null}
             </>
           ) : null}
           {error ? (

@@ -216,6 +216,62 @@ export const POST = handle(async (request) => {
       return json({ access });
     }
 
+    // ----- catalog: subjects, booklet order, universities, AI rules -----
+    case 'catalog.save': {
+      await requirePerm(request, 'content');
+      const c = (b.catalog ?? {}) as Record<string, unknown>;
+      const id = (v: unknown) => str(v, 60).replace(/[^\w-]/g, '');
+      const stage = (v: unknown) => (typeof v === 'string' && /^stage[1-5]$/.test(v) ? v : 'stage1');
+      const arr = (v: unknown, max: number) => (Array.isArray(v) ? v.slice(0, max) : []);
+      const catalog = {
+        subjects: arr(c.subjects, 200)
+          .map((x) => x as Record<string, unknown>)
+          .filter((x) => id(x.id) && str(x.name, 80))
+          .map((x) => ({
+            id: id(x.id),
+            name: str(x.name, 80),
+            stageId: stage(x.stageId),
+            color: '#493BEA',
+            icon: 'book',
+            isFree: x.isFree !== false,
+            description: str(x.description, 200),
+            image: /^https:\/\//.test(String(x.image ?? '')) ? str(x.image, 500) : undefined,
+          })),
+        hiddenSubjects: arr(c.hiddenSubjects, 300).map(id).filter(Boolean),
+        order: Object.fromEntries(
+          Object.entries((c.order ?? {}) as Record<string, unknown>)
+            .slice(0, 300)
+            .map(([k, v]) => [id(k), arr(v, 200).map((x) => str(x, 120)).filter(Boolean)]),
+        ),
+        universities: arr(c.universities, 100)
+          .map((x) => x as Record<string, unknown>)
+          .filter((x) => id(x.id) && str(x.name, 100))
+          .map((x) => ({
+            id: id(x.id),
+            name: str(x.name, 100),
+            subjects: Object.fromEntries(
+              Object.entries((x.subjects ?? {}) as Record<string, unknown>)
+                .filter(([k]) => /^stage[1-5]$/.test(k))
+                .map(([k, v]) => [k, arr(v, 100).map(id).filter(Boolean)]),
+            ),
+          })),
+        ai: {
+          split: typeof (c.ai as Record<string, unknown>)?.split === 'string' ? str((c.ai as Record<string, string>).split, 3000) : '',
+          design: typeof (c.ai as Record<string, unknown>)?.design === 'string' ? str((c.ai as Record<string, string>).design, 3000) : '',
+          mcq: typeof (c.ai as Record<string, unknown>)?.mcq === 'string' ? str((c.ai as Record<string, string>).mcq, 3000) : '',
+        },
+      };
+      await putJson('config/catalog.json', catalog);
+      return json({ catalog });
+    }
+    case 'universities.stats': {
+      const me = await requireUser(request);
+      if (!isStaff(me)) throw new HttpError(403, 'You do not have permission for this.');
+      const counts: Record<string, number> = {};
+      for (const u of await listUsers()) if (u.kind === 'student') counts[u.universityId ?? ''] = (counts[u.universityId ?? ''] ?? 0) + 1;
+      return json({ counts });
+    }
+
     // ----- staff (admin only) -----
     case 'staff.list': {
       await requirePerm(request, 'admin');

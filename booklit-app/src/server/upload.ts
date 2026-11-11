@@ -53,7 +53,8 @@ export async function readUpload(request: Request): Promise<{ ok: true; upload: 
     if (ctype.includes('application/octet-stream')) {
       name = decodeHeader(request.headers.get('x-file-name')) || name;
       mime = decodeHeader(request.headers.get('x-file-type'));
-      const o = decodeHeader(request.headers.get('x-options'));
+      const b64 = request.headers.get('x-options-b64');
+      const o = b64 ? new TextDecoder().decode(fromBase64(b64)) : decodeHeader(request.headers.get('x-options'));
       if (o) options = JSON.parse(o);
       bytes = new Uint8Array(await request.arrayBuffer());
     } else if (ctype.includes('application/json')) {

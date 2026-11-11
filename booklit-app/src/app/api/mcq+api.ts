@@ -29,7 +29,7 @@ export function OPTIONS() {
 export async function POST(request: Request) {
   const denied = await aiGate(request, 'user');
   if (denied) return denied;
-  let body: { topic?: string; text?: string; count?: number; avoid?: string[] };
+  let body: { topic?: string; text?: string; count?: number; avoid?: string[]; rules?: string };
   try {
     body = await request.json();
   } catch {
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
 
   try {
     const out = await geminiJson<{ mcqs?: { question?: string; options?: string[]; answerIndex?: number; explanation?: string }[] }>({
-      system: `You write exam-style multiple-choice questions for dental students. Write exactly ${count} questions based only on the topic text, in the same language as the text. Each has exactly 4 plausible options, answerIndex 0-3 for the single correct option (vary its position), and a one-sentence explanation.${avoid.length ? ' Do not repeat these existing questions: ' + avoid.join(' | ') : ''}`,
+      system: `You write exam-style multiple-choice questions for dental students. Write exactly ${count} questions based only on the topic text, in the same language as the text. Each has exactly 4 plausible options, answerIndex 0-3 for the single correct option (vary its position), and a one-sentence explanation. Never invent facts that are not in the topic text.${typeof body.rules === 'string' && body.rules.trim() ? ` Rules from the BOOKLIT team: ${body.rules.trim().slice(0, 1000)}` : ''}${avoid.length ? ' Do not repeat these existing questions: ' + avoid.join(' | ') : ''}`,
       parts: [{ text: `Topic: ${body.topic ?? ''}\n\n${text}` }],
       schema: SCHEMA,
       maxTokens: 8192,
