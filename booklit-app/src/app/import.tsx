@@ -14,6 +14,8 @@ import { allCourseSubjects, stageName, UPLOADS_SUBJECT } from '@/data/content';
 import { newBlankBooklet } from '@/lib/editor';
 import { ACCEPTED_TYPES, convertFile, MAX_UPLOAD_MB, type ImportOptions } from '@/lib/import';
 import { log } from '@/lib/log';
+import { BookletPrompts } from '@/components/booklet-prompts';
+import type { AiRules } from '@/data/types';
 import { useApp } from '@/store/app-store';
 
 const STEPS = ['Uploading your file', 'Reading every page', 'Designing the booklet', 'Writing questions for each topic', 'Placing images', 'Almost done'];
@@ -36,6 +38,8 @@ export default function ImportScreen() {
   const [opts, setOpts] = useState<ImportOptions>({ design: 'enhanced', questionsPerTopic: 5, subjectId: UPLOADS_SUBJECT.id });
   const [state, setState] = useState<{ phase: 'idle' | 'working' | 'error'; error?: string; step: number }>({ phase: 'idle', step: 0 });
   const abort = useRef<AbortController | null>(null);
+  // This booklet's own prompts (null = use the unified prompts from AI settings).
+  const [prompts, setPrompts] = useState<AiRules | null>(null);
 
   useEffect(() => {
     if (state.phase !== 'working') return;
@@ -106,7 +110,7 @@ export default function ImportScreen() {
     abort.current = new AbortController();
     const timer = setTimeout(() => abort.current?.abort(), 5 * 60 * 1000);
     try {
-      const { booklet } = await convertFile(file, { ...opts, subjectId: personal ? UPLOADS_SUBJECT.id : opts.subjectId, unlimited: app.canUpload, rules: app.catalog.ai }, abort.current.signal, (stage) => {
+      const { booklet } = await convertFile(file, { ...opts, subjectId: personal ? UPLOADS_SUBJECT.id : opts.subjectId, unlimited: app.canUpload, rules: prompts ?? app.catalog.ai }, abort.current.signal, (stage) => {
         if (stage === 'images') setState((st) => ({ ...st, step: Math.max(st.step, 4) }));
       });
       app.addImported(booklet);
@@ -253,9 +257,7 @@ export default function ImportScreen() {
                 placeholderTextColor={p.textFaint}
                 style={[styles.instructions, { borderColor: p.border, color: p.text, fontFamily: Font.regular }]}
               />
-              {app.canUpload && (app.catalog.ai.split || app.catalog.ai.design || app.catalog.ai.mcq) ? (
-                <Txt faint size={Type.tiny}>Your saved AI rules are applied too (Admin dashboard → AI settings).</Txt>
-              ) : null}
+              <BookletPrompts value={prompts} onChange={setPrompts} />
             </View>
           </>
         ) : null}

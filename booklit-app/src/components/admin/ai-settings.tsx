@@ -44,9 +44,9 @@ export function AiSettings() {
   return (
     <View style={{ gap: 12 }}>
       <Card style={{ padding: 16, gap: 4 }}>
-        <Txt weight="semibold">Teach the AI how you want booklets</Txt>
+        <Txt weight="semibold">Unified prompts</Txt>
         <Txt muted size={Type.small} style={{ lineHeight: 20 }}>
-          Write your rules in plain words (Arabic or English). The AI follows them for every file. When you upload a file you can also add instructions just for that file.
+          Write them in plain words (Arabic or English). Every new booklet starts with these. When you create a booklet you can change them for that booklet only; if you leave them, these are used.
         </Txt>
       </Card>
       {FIELDS.map((f) => (

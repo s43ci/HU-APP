@@ -760,6 +760,15 @@ export const AR: Record<string, string> = {
   'Anything else? Write it like you would tell a person.': 'هل هناك شيء آخر؟ اكتبه كما تقوله لشخص.',
   'e.g. Make 8 topics in this order: 1. Introduction 2. Classification … Put every classification in a table.': 'مثال: اجعلها 8 مواضيع بهذا الترتيب: 1. المقدمة 2. التصنيف … وضع كل تصنيف في جدول.',
   'Your saved AI rules are applied too (Admin dashboard → AI settings).': 'تُطبَّق قواعدك المحفوظة أيضاً (لوحة الإدارة ← إعدادات الذكاء الاصطناعي).',
+  'Prompts for this booklet': 'برومبتات هذه الملزمة',
+  'Changed for this booklet only': 'معدّلة لهذه الملزمة فقط',
+  'Using the unified prompts': 'تُستخدم البرومبتات الموحدة',
+  'Empty = the built-in behaviour': 'فارغ = السلوك الافتراضي',
+  'Use the unified prompts': 'استخدام البرومبتات الموحدة',
+  'Make these the unified prompts': 'اجعلها البرومبتات الموحدة',
+  'Saved as the unified prompts for every booklet.': 'حُفظت كبرومبتات موحدة لكل الملازم.',
+  'Unified prompts': 'البرومبتات الموحدة',
+  'Write them in plain words (Arabic or English). Every new booklet starts with these. When you create a booklet you can change them for that booklet only; if you leave them, these are used.': 'اكتبها بكلمات بسيطة (عربي أو إنجليزي). كل ملزمة جديدة تبدأ بها، وعند إنشاء الملزمة يمكنك تعديلها لتلك الملزمة فقط، وإن تركتها تُستخدم هذه.',
 };
 
 /** Templates for strings that contain numbers. */
