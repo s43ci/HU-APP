@@ -4,12 +4,11 @@
  * Gemini follows ONE fixed prompt (src/server/prompt.ts, the ENKIDU method) or, for a single booklet,
  * the prompt written for it; the app output format is always added. MCQs are written for every topic.
  */
-import { fetchWithRetry, GeminiError } from '@/server/gemini';
+import { AiError, runAi, type AiResult, type GSchema } from '@/server/ai';
 import { geminiPart, readUpload } from '@/server/upload';
 import { appFormat, ENKIDU_PROMPT } from '@/server/prompt';
 import { aiGate } from '@/server/supa';
 
-const MODEL = 'gemini-3.5-flash-lite';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -105,72 +104,41 @@ export async function POST(request: Request) {
     return json({ error: (e as Error).message || 'Could not send the file to the AI service.' }, 502);
   }
 
-  type Gen = { candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[] };
-  const ask = async (temperature: number, attempts: number) =>
-    fetchWithRetry(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: prompt }] },
-          contents: [{ role: 'user', parts: [part, { text: topics ? `Convert this file into the booklet JSON with exactly ${topics} topics.` : 'Convert this file into the booklet JSON.' }] }],
-          generationConfig: { responseMimeType: 'application/json', responseSchema: schema, maxOutputTokens: 65536, temperature },
-        }),
-      },
-      attempts,
-      'import',
-    );
-  const readAnswer = async (res: Response) => {
-    const data = (await res.json()) as Gen;
-    const cand = data.candidates?.[0];
-    const raw = (cand?.content?.parts ?? []).map((p) => p.text ?? '').join('');
-    try {
-      return { parsed: JSON.parse(raw) as RawBooklet, finish: cand?.finishReason ?? '' };
-    } catch {
-      return { parsed: null, finish: cand?.finishReason || (raw ? 'BROKEN_JSON' : 'EMPTY') };
-    }
-  };
-
-  // Small files are sent inline, which leaves room (host limit ~8 calls per request) for one more try.
-  const inline = !part.fileData;
-  let res: Response;
+  // Gemini -> backup Gemini model -> Claude. Big files (sent through Gemini's file upload) skip the
+  // backup Gemini model: the host allows only ~8 outgoing calls per request and the upload uses some.
+  let out: AiResult;
   try {
-    res = await ask(0.2, 2);
+    out = await runAi({
+      kind: 'import',
+      system: prompt,
+      messages: [{ role: 'user', text: topics ? `Convert this file into the booklet JSON with exactly ${topics} topics.` : 'Convert this file into the booklet JSON.' }],
+      file: { geminiPart: part, bytes: upload.bytes, mime: upload.fileMime, text: upload.text },
+      schema: schema as GSchema,
+      maxTokens: 65536,
+      temperature: 0.2,
+      backup: !part.fileData,
+      effort: 'medium',
+    });
   } catch (e) {
     await cleanup();
-    return json({ error: (e as GeminiError).message }, 503);
-  }
-  if (res.status === 429 || res.status === 503) {
-    await cleanup();
-    return json({ error: 'The AI service is busy right now. Please try again in a minute.' }, 503);
-  }
-  if (!res.ok) {
-    await cleanup();
-    const detail = await res.text().catch(() => '');
-    return json({ error: `Conversion failed (${res.status}).`, detail: detail.slice(0, 300) }, 502);
-  }
-  let out = await readAnswer(res);
-  // A stopped or broken answer (e.g. Gemini's copyright filter "RECITATION") is asked once more, a little differently.
-  if (!out.parsed && out.finish !== 'MAX_TOKENS' && inline) {
-    try {
-      const again = await ask(0.6, 1);
-      if (again.ok) out = await readAnswer(again);
-    } catch {}
+    const err = e as AiError;
+    const why =
+      err.finish === 'MAX_TOKENS'
+        ? 'This file is too long to convert in one go. Please split it into smaller parts.'
+        : err.finish === 'RECITATION'
+          ? "The AI stopped because it would copy long passages word for word (Google's copyright filter). Try again, or split the file into smaller parts."
+          : err.finish === 'SAFETY' || err.finish === 'PROHIBITED_CONTENT'
+            ? 'The AI refused this file (safety filter). Try again, or remove the pages that may trigger it.'
+            : err.message;
+    return json({ error: why, detail: err.finish ? `finishReason: ${err.finish}` : undefined }, err.status ?? 503);
   }
   await cleanup();
-  if (!out.parsed) {
-    const why =
-      out.finish === 'MAX_TOKENS'
-        ? 'This file is too long to convert in one go. Please split it into smaller parts.'
-        : out.finish === 'RECITATION'
-          ? "The AI stopped because it would copy long passages word for word (Google's copyright filter). Try again, or split the file into smaller parts."
-          : out.finish === 'SAFETY' || out.finish === 'PROHIBITED_CONTENT'
-            ? "The AI refused this file (Google's safety filter). Try again, or remove the pages that may trigger it."
-            : 'The conversion returned an unreadable result. Please try again.';
-    return json({ error: why, detail: `finishReason: ${out.finish}` }, 502);
+  let parsed: RawBooklet;
+  try {
+    parsed = JSON.parse(out.text) as RawBooklet;
+  } catch {
+    return json({ error: out.finish === 'MAX_TOKENS' ? 'This file is too long to convert in one go. Please split it into smaller parts.' : 'The conversion returned an unreadable result. Please try again.', detail: `finishReason: ${out.finish}` }, 502);
   }
-  const parsed = out.parsed;
   const cand = { finishReason: out.finish };
 
   const booklet = clean(parsed, name);

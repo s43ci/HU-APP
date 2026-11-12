@@ -3,7 +3,8 @@
  * Every question is extracted as written, its answer is taken from the file when marked
  * (or worked out by the AI and flagged), and it is assigned to the best-matching topic.
  */
-import { CORS, fetchWithRetry, GeminiError, GEMINI_MODEL, json } from '@/server/gemini';
+import { AiError, runAi, type AiResult, type GSchema } from '@/server/ai';
+import { CORS, json } from '@/server/gemini';
 import { geminiPart, readUpload } from '@/server/upload';
 import { aiGate } from '@/server/supa';
 
@@ -66,32 +67,31 @@ ${topics.map((t: { id: string; title: string }) => `${t.id} = ${t.title}`).join(
     return json({ error: (e as Error).message || 'Could not send the file to the AI service.' }, 502);
   }
 
-  let res: Response;
+  // Gemini -> backup Gemini model (small files only, host call limit) -> Claude.
+  let out: AiResult;
   try {
-    res = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: 'user', parts: [part, { text: 'Extract and assign all questions.' }] }],
-        generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, maxOutputTokens: 65536, temperature: 0.1 },
-      }),
-    }, 2, 'bank');
+    out = await runAi({
+      kind: 'bank',
+      system,
+      messages: [{ role: 'user', text: 'Extract and assign all questions.' }],
+      file: { geminiPart: part, bytes: read.upload.bytes, mime: read.upload.fileMime, text: read.upload.text },
+      schema: SCHEMA as GSchema,
+      maxTokens: 65536,
+      temperature: 0.1,
+      backup: !part.fileData,
+      effort: 'medium',
+    });
   } catch (e) {
     await cleanup();
-    return json({ error: (e as GeminiError).message }, 503);
+    const err = e as AiError;
+    return json({ error: err.finish === 'MAX_TOKENS' ? 'This bank is too long for one upload. Split it into smaller files.' : err.message }, err.status ?? 503);
   }
   await cleanup();
-  if (res.status === 429) return json({ error: 'The service is busy. Try again in a minute.' }, 429);
-  if (!res.ok) return json({ error: `Processing failed (${res.status}).` }, 502);
-
-  const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[] };
-  const cand = data.candidates?.[0];
   let parsed: { questions?: { question?: string; options?: string[]; answerIndex?: number; answerSource?: string; explanation?: string; topicId?: string }[] };
   try {
-    parsed = JSON.parse((cand?.content?.parts ?? []).map((p) => p.text ?? '').join(''));
+    parsed = JSON.parse(out.text);
   } catch {
-    return json({ error: cand?.finishReason === 'MAX_TOKENS' ? 'This bank is too long for one upload. Split it into smaller files.' : 'The result could not be read. Please try again.' }, 502);
+    return json({ error: out.finish === 'MAX_TOKENS' ? 'This bank is too long for one upload. Split it into smaller files.' : 'The result could not be read. Please try again.' }, 502);
   }
 
   const ids = new Set(topics.map((t: { id: string }) => t.id));
@@ -110,5 +110,5 @@ ${topics.map((t: { id: string; title: string }) => `${t.id} = ${t.title}`).join(
     })
     .filter((q) => q.question && q.options.length >= 2);
   if (!questions.length) return json({ error: 'No multiple-choice questions were found in this file.' }, 422);
-  return json({ questions, truncated: cand?.finishReason === 'MAX_TOKENS' });
+  return json({ questions, truncated: out.finish === 'MAX_TOKENS' });
 }

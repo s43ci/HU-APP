@@ -1,5 +1,6 @@
 /** Generate practice MCQs for one topic (used by the booklet editor). */
-import { CORS, geminiJson, GeminiError, json } from '@/server/gemini';
+import { geminiJson } from '@/server/ai';
+import { CORS, GeminiError, json } from '@/server/gemini';
 import { aiGate } from '@/server/supa';
 
 const SCHEMA = {

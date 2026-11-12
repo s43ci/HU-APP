@@ -1,5 +1,6 @@
 /** AI tools for the booklet editor: rewrite one block of text. */
-import { CORS, geminiJson, GeminiError, json } from '@/server/gemini';
+import { geminiJson } from '@/server/ai';
+import { CORS, GeminiError, json } from '@/server/gemini';
 import { aiGate } from '@/server/supa';
 
 type Action = 'simplify' | 'fix' | 'translate' | 'bullets' | 'note' | 'expand';

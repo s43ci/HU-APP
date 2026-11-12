@@ -74,10 +74,10 @@ export async function countUser(id: string, platform: string | null) {
 }
 
 /** Record one Gemini call from its usageMetadata. */
-export async function countAi(kind: AiKind, meta?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number }) {
+export async function countAi(kind: AiKind, meta?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number }, price?: { in: number; out: number }) {
   const inTok = meta?.promptTokenCount ?? 0;
   const outTok = (meta?.candidatesTokenCount ?? 0) + (meta?.thoughtsTokenCount ?? 0);
-  const cost = (inTok * PRICE_IN + outTok * PRICE_OUT) / 1_000_000;
+  const cost = (inTok * (price?.in ?? PRICE_IN) + outTok * (price?.out ?? PRICE_OUT)) / 1_000_000;
   if (monthCache) monthCache.cost += cost;
   await putMarker(`${dir()}/a~${day()}~${kind}~${Math.round(cost * 1e6)}~${inTok}~${outTok}~${rid()}`).catch(() => {});
 }

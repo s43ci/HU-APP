@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "@expo-google-fonts/alexandria": "^0.4.2",
     "@expo-google-fonts/ibm-plex-sans-arabic": "^0.4.2",
     "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",

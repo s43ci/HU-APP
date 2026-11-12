@@ -3,10 +3,9 @@
  * Uses Google's Gemini API with a cheap "flash-lite" model.
  * The key is the EAS secret env var GEMINI_API_KEY.
  */
-import { fetchWithRetry } from '@/server/gemini';
+import { AiError, runAi } from '@/server/ai';
 import { aiGate } from '@/server/supa';
 
-const MODEL = 'gemini-3.5-flash-lite';
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 type Body = { subject?: string; booklet?: string; topic?: string; topicText?: string; messages?: ChatMessage[] };
@@ -49,30 +48,23 @@ export async function POST(request: Request) {
 
   const context = `Subject: ${body.subject ?? ''}\nBooklet: ${body.booklet ?? ''}\nTopic: ${body.topic ?? ''}\n\nBooklet text:\n${(body.topicText ?? '').slice(0, 12000)}`;
 
-  let res: Response;
+  let reply: string;
   try {
-    res = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: `${SYSTEM}\n\n${context}` }] },
-        contents: history.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content.slice(0, 4000) }] })),
-        generationConfig: { maxOutputTokens: 900, temperature: 0.4 },
-      }),
-    }, 2, 'ask');
+    // Gemini -> backup Gemini model -> Claude, so a busy model does not stop the student.
+    const r = await runAi({
+      kind: 'ask',
+      system: `${SYSTEM}\n\n${context}`,
+      messages: history.map((m) => ({ role: m.role, text: m.content.slice(0, 4000) })),
+      maxTokens: 900,
+      temperature: 0.4,
+      effort: 'low',
+    });
+    reply = r.text;
   } catch (e) {
-    return json({ error: (e as Error).message }, 503);
+    return json({ error: (e as Error).message }, e instanceof AiError ? e.status : 503);
   }
 
-  if (res.status === 429) return json({ error: 'Too many requests, try again in a minute.' }, 429);
-  if (!res.ok) return json({ error: `AI service error (${res.status})` }, 502);
-
-  const data = (await res.json()) as {
-    candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
-  };
-  const answer = (data.candidates?.[0]?.content?.parts ?? [])
-    .map((p) => p.text ?? '')
-    .join('')
+  const answer = reply
     .replace(/\*\*(.+?)\*\*/g, '$1')
     .replace(/^\s*[*-]\s+/gm, '• ')
     .trim();
