@@ -3,7 +3,8 @@
  *
  *   1. Gemini (main model)
  *   2. Gemini (backup model, separate capacity) — when the request can afford one more outgoing call
- *   3. Claude (Anthropic) — only if ANTHROPIC_API_KEY is set
+ *   3. OpenRouter (free models) — only if OPENROUTER_API_KEY is set
+ *   4. Claude (Anthropic) — only if ANTHROPIC_API_KEY is set (small files only when OpenRouter is set too)
  *
  * The next one is tried when the previous is busy (429 / 5xx / network), or its answer is unusable
  * (empty, stopped by a filter, or not the JSON asked for). Every call is metered for the Usage page.
@@ -57,13 +58,14 @@ export class AiError extends Error {
 }
 
 const BUSY = 'The AI service is busy right now. Please try again in a minute.';
+/** Testing only (never set in production): AI_SIMULATE_BUSY=<model,...> makes those models act busy. */
+const simulateBusy = (model: string) => (process.env.AI_SIMULATE_BUSY ?? '').split(',').includes(model);
 
 /** Gemini answer -> text + why it stopped. */
 async function askGemini(model: string, input: AiInput): Promise<AiResult> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new AiError('The AI service is not configured.', 500);
-  // Testing only (never set in production): AI_SIMULATE_BUSY=<model,...> makes these models act busy.
-  if ((process.env.AI_SIMULATE_BUSY ?? '').split(',').includes(model)) throw new AiError(BUSY, 503);
+  if (simulateBusy(model)) throw new AiError(BUSY, 503);
   const contents = input.messages.map((m, i) => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [...(input.file && i === input.messages.length - 1 ? [input.file.geminiPart] : []), { text: m.text }],
@@ -100,6 +102,68 @@ async function askGemini(model: string, input: AiInput): Promise<AiResult> {
   const cand = data.candidates?.[0];
   const text = (cand?.content?.parts ?? []).map((p) => p.text ?? '').join('');
   return { text, finish: cand?.finishReason ?? '', provider: model };
+}
+
+/**
+ * OpenRouter models tried in order (free models; OpenRouter moves to the next one when a model is busy).
+ * Set OPENROUTER_MODELS (comma separated) to change them.
+ */
+const OPENROUTER_MODELS = (process.env.OPENROUTER_MODELS || 'nvidia/nemotron-3.5-super-vl:free,google/gemma-4-31b-it:free,dots-studio/dots-3-note-preview:free').split(',').map((m) => m.trim()).filter(Boolean);
+
+/** OpenRouter answer (free backup). PDFs go through OpenRouter's free text reader. */
+async function askOpenRouter(input: AiInput): Promise<AiResult> {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) throw new AiError(BUSY, 503);
+  const f = input.file;
+  const filePart = (): Record<string, unknown>[] => {
+    if (!f) return [];
+    if (f.text !== null) return [{ type: 'text', text: f.text }];
+    const data = toB64(f.bytes);
+    if (f.mime === 'application/pdf') return [{ type: 'file', file: { filename: 'file.pdf', file_data: `data:application/pdf;base64,${data}` } }];
+    if (f.mime.startsWith('image/')) return [{ type: 'image_url', image_url: { url: `data:${f.mime};base64,${data}` } }];
+    return [];
+  };
+  const messages = [
+    { role: 'system', content: input.system },
+    ...input.messages.map((m, i) =>
+      i === input.messages.length - 1 && m.role === 'user' && f ? { role: 'user', content: [...filePart(), { type: 'text', text: m.text }] } : { role: m.role, content: m.text },
+    ),
+  ];
+  let res: Response;
+  try {
+    res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Title': 'Booklit' },
+      body: JSON.stringify({
+        models: OPENROUTER_MODELS,
+        messages,
+        max_tokens: Math.min(input.maxTokens, 32000),
+        ...(f?.mime === 'application/pdf' && f.text === null ? { plugins: [{ id: 'file-parser', pdf: { engine: 'pdf-text' } }] } : {}),
+        ...(input.schema ? { response_format: { type: 'json_schema', json_schema: { name: 'answer', strict: true, schema: toJsonSchema(input.schema) } } } : {}),
+      }),
+    });
+  } catch {
+    throw new AiError(BUSY, 503);
+  }
+  if (res.status === 429 || res.status === 402 || res.status >= 500) throw new AiError(BUSY, 503);
+  if (!res.ok) throw new AiError(`Backup AI error (${res.status}).`, 502);
+  const data = (await res.json()) as {
+    model?: string;
+    choices?: { message?: { content?: string }; finish_reason?: string }[];
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+    error?: { message?: string };
+  };
+  if (data.error || !data.choices?.length) throw new AiError(BUSY, 503);
+  await countAi(input.kind, { promptTokenCount: data.usage?.prompt_tokens, candidatesTokenCount: data.usage?.completion_tokens }, { in: 0, out: 0 });
+  const c = data.choices[0];
+  let text = (c.message?.content ?? '').replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
+  // Some free models wrap the JSON in a sentence: keep only the JSON object.
+  if (input.schema && text && !text.startsWith('{')) {
+    const a = text.indexOf('{');
+    const b = text.lastIndexOf('}');
+    if (a >= 0 && b > a) text = text.slice(a, b + 1);
+  }
+  return { text, finish: c.finish_reason === 'length' ? 'MAX_TOKENS' : 'STOP', provider: `openrouter:${data.model ?? ''}` };
 }
 
 /** Gemini response schema -> JSON Schema for Claude's structured outputs. */
@@ -193,7 +257,9 @@ function usable(r: AiResult, json: boolean) {
 export async function runAi(input: AiInput): Promise<AiResult> {
   const steps: (() => Promise<AiResult>)[] = [() => askGemini(GEMINI_MODEL, input)];
   if (input.backup !== false) steps.push(() => askGemini(GEMINI_BACKUP_MODEL, input));
-  if (process.env.ANTHROPIC_API_KEY) steps.push(() => askClaude(input));
+  if (process.env.OPENROUTER_API_KEY) steps.push(() => askOpenRouter(input));
+  // Big files already used several of the host's ~8 outgoing calls on the upload: at most one backup provider then.
+  if (process.env.ANTHROPIC_API_KEY && (input.backup !== false || !process.env.OPENROUTER_API_KEY)) steps.push(() => askClaude(input));
   let last: AiError = new AiError(BUSY, 503);
   let lastResult: AiResult | null = null;
   for (const step of steps) {
