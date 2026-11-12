@@ -105,40 +105,73 @@ export async function POST(request: Request) {
     return json({ error: (e as Error).message || 'Could not send the file to the AI service.' }, 502);
   }
 
+  type Gen = { candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[] };
+  const ask = async (temperature: number, attempts: number) =>
+    fetchWithRetry(
+      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: prompt }] },
+          contents: [{ role: 'user', parts: [part, { text: topics ? `Convert this file into the booklet JSON with exactly ${topics} topics.` : 'Convert this file into the booklet JSON.' }] }],
+          generationConfig: { responseMimeType: 'application/json', responseSchema: schema, maxOutputTokens: 65536, temperature },
+        }),
+      },
+      attempts,
+      'import',
+    );
+  const readAnswer = async (res: Response) => {
+    const data = (await res.json()) as Gen;
+    const cand = data.candidates?.[0];
+    const raw = (cand?.content?.parts ?? []).map((p) => p.text ?? '').join('');
+    try {
+      return { parsed: JSON.parse(raw) as RawBooklet, finish: cand?.finishReason ?? '' };
+    } catch {
+      return { parsed: null, finish: cand?.finishReason || (raw ? 'BROKEN_JSON' : 'EMPTY') };
+    }
+  };
+
+  // Small files are sent inline, which leaves room (host limit ~8 calls per request) for one more try.
+  const inline = !part.fileData;
   let res: Response;
   try {
-    res = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: prompt }] },
-        contents: [{ role: 'user', parts: [part, { text: topics ? `Convert this file into the booklet JSON with exactly ${topics} topics.` : 'Convert this file into the booklet JSON.' }] }],
-        generationConfig: { responseMimeType: 'application/json', responseSchema: schema, maxOutputTokens: 65536, temperature: 0.2 },
-      }),
-    }, part.fileData ? 2 : 3, 'import'); // small files can retry once more within the host's call limit
+    res = await ask(0.2, 2);
   } catch (e) {
     await cleanup();
     return json({ error: (e as GeminiError).message }, 503);
   }
-  await cleanup();
-  if (res.status === 429 || res.status === 503) return json({ error: 'The AI service is busy right now. Please try again in a minute.' }, 503);
+  if (res.status === 429 || res.status === 503) {
+    await cleanup();
+    return json({ error: 'The AI service is busy right now. Please try again in a minute.' }, 503);
+  }
   if (!res.ok) {
+    await cleanup();
     const detail = await res.text().catch(() => '');
     return json({ error: `Conversion failed (${res.status}).`, detail: detail.slice(0, 300) }, 502);
   }
-
-  const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[] };
-  const cand = data.candidates?.[0];
-  const raw = (cand?.content?.parts ?? []).map((p) => p.text ?? '').join('');
-  let parsed: RawBooklet;
-  try {
-    parsed = JSON.parse(raw) as RawBooklet;
-  } catch {
-    return json(
-      { error: cand?.finishReason === 'MAX_TOKENS' ? 'This file is too long to convert in one go. Please split it into smaller parts.' : 'The conversion returned an unreadable result. Please try again.' },
-      502,
-    );
+  let out = await readAnswer(res);
+  // A stopped or broken answer (e.g. Gemini's copyright filter "RECITATION") is asked once more, a little differently.
+  if (!out.parsed && out.finish !== 'MAX_TOKENS' && inline) {
+    try {
+      const again = await ask(0.6, 1);
+      if (again.ok) out = await readAnswer(again);
+    } catch {}
   }
+  await cleanup();
+  if (!out.parsed) {
+    const why =
+      out.finish === 'MAX_TOKENS'
+        ? 'This file is too long to convert in one go. Please split it into smaller parts.'
+        : out.finish === 'RECITATION'
+          ? "The AI stopped because it would copy long passages word for word (Google's copyright filter). Try again, or split the file into smaller parts."
+          : out.finish === 'SAFETY' || out.finish === 'PROHIBITED_CONTENT'
+            ? "The AI refused this file (Google's safety filter). Try again, or remove the pages that may trigger it."
+            : 'The conversion returned an unreadable result. Please try again.';
+    return json({ error: why, detail: `finishReason: ${out.finish}` }, 502);
+  }
+  const parsed = out.parsed;
+  const cand = { finishReason: out.finish };
 
   const booklet = clean(parsed, name);
   if (!booklet.topics.length) return json({ error: 'No readable content was found in this file.' }, 422);

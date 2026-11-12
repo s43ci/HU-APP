@@ -42,6 +42,12 @@ export type ImportOptions = {
   prompt?: string;
 };
 
+function bytesToBase64(bytes: Uint8Array) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
 /** JSON -> base64 of its UTF-8 bytes (headers cannot carry Arabic text directly). */
 function b64json(v: unknown) {
   const bytes = new TextEncoder().encode(JSON.stringify(v));
@@ -79,6 +85,15 @@ export async function postFile<T>(path: string, asset: DocumentPickerAsset, opti
     'X-File-Type': encodeURIComponent(asset.mimeType ?? ''),
     'X-Options-B64': b64json(options),
   };
+  // Base64 JSON upload: used when the raw upload cannot be sent, or when the host's firewall
+  // rejects the raw file (it inspects file contents; encoded, the same file goes through).
+  const sendEncoded = async () =>
+    fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+      body: JSON.stringify({ name: asset.name, mimeType: asset.mimeType ?? '', data: bytesToBase64(data), options }),
+      signal,
+    });
   let res: Response;
   try {
     try {
@@ -88,20 +103,27 @@ export async function postFile<T>(path: string, asset: DocumentPickerAsset, opti
       if ((e as Error).name === 'AbortError') throw e;
       // Some fetch implementations cannot send binary bodies: fall back to base64 JSON.
       log('warn', area, 'Raw upload failed, retrying as base64', { ...meta, reason: (e as Error).message });
-      const b64 = Platform.OS === 'web' ? '' : await new FsFile(asset.uri).base64();
-      res = await fetch(`${API_BASE}${path}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-        body: JSON.stringify({ name: asset.name, mimeType: asset.mimeType ?? '', data: b64, options }),
-        signal,
-      });
+      res = await sendEncoded();
+    }
+    // Rejected before reaching BOOKLIT's server (no JSON from us): send it again encoded.
+    if (res.status === 403 && !(res.headers.get('content-type') ?? '').includes('application/json')) {
+      const why = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
+      log('warn', area, 'Upload blocked by the host firewall, retrying encoded', { ...meta, detail: why });
+      res = await sendEncoded();
     }
   } catch (e) {
     if ((e as Error).name === 'AbortError') throw e;
     logError(area, e, { ...meta, step: 'network' });
     throw new Error(`Network problem: ${(e as Error).message}. Check your internet connection and try again.`);
   }
-  const out = (await res.json().catch(() => ({}))) as T & { error?: string; detail?: string };
+  const raw = await res.text().catch(() => '');
+  let out: T & { error?: string; detail?: string };
+  try {
+    out = JSON.parse(raw) as typeof out;
+  } catch {
+    // Not from BOOKLIT's server: keep the start of the page for the error log.
+    out = { detail: raw.replace(/\s+/g, ' ').slice(0, 200) } as typeof out;
+  }
   if (!res.ok || out.error) {
     const msg =
       out.error ??

@@ -1,15 +1,26 @@
 import type { ErrorBoundaryProps } from 'expo-router';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
-import { Pressable, Share, Text, View } from 'react-native';
+import { Platform, Pressable, Share, Text, View } from 'react-native';
 
 import { formatReport, logError } from '@/lib/log';
 
 /** Shown when a screen crashes while rendering. Uses plain styles so it works even if the store failed. */
 export function AppErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  // After a new release, an open web app may ask for a file of the old version that no longer exists.
+  // Reloading once fetches the new version (at most once a minute, so it can never loop).
+  const stale = Platform.OS === 'web' && (error.name === 'AsyncRequireError' || /Loading module .* failed/i.test(error.message));
   useEffect(() => {
     logError('screen', error);
-  }, [error]);
+    if (!stale) return;
+    try {
+      const last = Number(sessionStorage.getItem('booklit.reloaded') || 0);
+      if (Date.now() - last > 60_000) {
+        sessionStorage.setItem('booklit.reloaded', String(Date.now()));
+        window.location.reload();
+      }
+    } catch {}
+  }, [error, stale]);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F4F4F8', alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12 }}>
