@@ -9,6 +9,8 @@ import { log, logError } from './log';
 import { extractPdfImages, type ExtractedImage } from './pdf-images';
 import { consume } from './usage';
 import { authHeader } from './api';
+import { pdfText } from './word-count';
+import { better, countWords, measureBooklet, restoreMissing, retryNote, type LengthCheck } from './length-check';
 
 export const ACCEPTED_TYPES = [
   'application/pdf',
@@ -29,6 +31,9 @@ type ServerBooklet = {
   topics: { title: string; blocks: (ContentBlock & { page?: number })[]; mcqs: Omit<Mcq, 'id' | 'topicId' | 'source'>[] }[];
 };
 
+/** How the booklet's length compares with the source (from the server). */
+export type { LengthCheck };
+
 export type ImportOptions = {
   /** 'enhanced' = AI designs the booklet (lists, tables, exam tips, key points); 'original' = layout as in the file. */
   design: 'enhanced' | 'original';
@@ -40,6 +45,8 @@ export type ImportOptions = {
   topics?: number | null;
   /** A prompt for this booklet only (replaces the fixed prompt; the app format is always added). */
   prompt?: string;
+  /** How much to shorten, in % (0 = no shortening: reorganise only). */
+  shorten?: number;
 };
 
 function bytesToBase64(bytes: Uint8Array) {
@@ -140,20 +147,61 @@ export async function convertFile(
   asset: DocumentPickerAsset,
   options: ImportOptions,
   signal?: AbortSignal,
-  onStage?: (stage: 'uploading' | 'images') => void,
-): Promise<{ booklet: ImportedBooklet; truncated: boolean }> {
+  onStage?: (stage: 'uploading' | 'retrying' | 'images') => void,
+): Promise<{ booklet: ImportedBooklet; truncated: boolean; length: LengthCheck | null }> {
   await consume('convert', options.unlimited);
   onStage?.('uploading');
   const bytes = await readAssetBytes(asset).catch(() => undefined);
-  const data = await postFile<{ booklet: ServerBooklet; truncated?: boolean }>(
-    '/api/import',
-    asset,
-    { questionsPerTopic: options.questionsPerTopic, topics: options.topics ?? null, prompt: options.prompt || undefined },
-    'upload',
-    signal,
-    bytes,
-  );
-  log('info', 'upload', 'Converted', { topics: data.booklet.topics.length, truncated: !!data.truncated });
+  const isPdfFile = /\.pdf$/i.test(asset.name) || asset.mimeType === 'application/pdf';
+  // The source text (read here, no AI), to check the booklet kept its information and length.
+  // Word and PowerPoint files are checked by the server, which reads their text itself.
+  const source = isPdfFile && bytes ? await pdfText(bytes) : undefined;
+  const sourceText = source?.text;
+  const shorten = options.shorten ?? 0;
+  type Reply = { booklet: ServerBooklet; truncated?: boolean; length?: LengthCheck | null; via?: string };
+  const send = (extra: Record<string, unknown>) =>
+    postFile<Reply>(
+      '/api/import',
+      asset,
+      { questionsPerTopic: options.questionsPerTopic, topics: options.topics ?? null, prompt: options.prompt || undefined, shorten, sourceWords: sourceText ? countWords(sourceText) : undefined, ...extra },
+      'upload',
+      signal,
+      bytes,
+    );
+  const check = (r: Reply) => (sourceText ? measureBooklet(r.booklet, { words: null, text: sourceText }, shorten) : (r.length ?? null));
+  let data = await send({});
+  let length = check(data);
+  log('info', 'upload', 'Converted', { topics: data.booklet.topics.length, truncated: !!data.truncated, via: data.via, length: length && { ...length, missing: length.missing.slice(0, 20) } });
+  // Off target: one more attempt that is told exactly what was wrong. With no shortening, small gaps are
+  // filled from the source below instead (faster, and exact).
+  if (length && !length.ok && !data.truncated && (shorten > 0 || (length.coverage ?? 0) < 85)) {
+    onStage?.('retrying');
+    const first = length;
+    try {
+      const { note, askWords } = retryNote(first);
+      const again = await send({ retryNote: note, askWords });
+      const second = check(again);
+      log('info', 'upload', 'Second attempt', { via: again.via, length: second && { ...second, missing: second.missing.slice(0, 20) } });
+      if (second && again.booklet.topics.length && better(first, second) === second) {
+        data = again;
+        length = second;
+      }
+    } catch (e) {
+      logError('upload', e, { step: 'second-attempt' });
+    }
+    length = { ...length, retried: true };
+  }
+  // Safety net from the source, word for word (no AI):
+  // - no shortening: whatever the AI still left out is added back;
+  // - shortening: if the AI shortened more than asked, the most informative missing sentences are added
+  //   back until the booklet has the asked length.
+  if (length && source && !length.ok && (shorten <= 0 || length.outputWords < length.targetWords)) {
+    const restored = restoreMissing(data.booklet as Parameters<typeof restoreMissing>[0], source.pages, shorten > 0 ? length.targetWords - length.outputWords : undefined);
+    const after = measureBooklet(data.booklet, { words: null, text: source.text }, shorten);
+    // No shortening: every sentence that lost its information is back, so the booklet is complete.
+    if (after) length = { ...after, ok: shorten <= 0 ? true : after.ok, retried: length.retried, restored };
+    log('info', 'upload', 'Restored from the source', { sentences: restored, coverage: length.coverage, words: length.outputWords });
+  }
 
   const id = `upload-${Date.now().toString(36)}`;
 
@@ -198,6 +246,7 @@ export async function convertFile(
   return {
     booklet: { id, title: data.booklet.title, fileName: asset.name, language: data.booklet.language, createdAt: Date.now(), topics, mcqs, subjectId: options.subjectId },
     truncated: !!data.truncated,
+    length,
   };
 }
 

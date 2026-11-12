@@ -6,7 +6,8 @@
  */
 import { AiError, runAi, type AiResult, type GSchema } from '@/server/ai';
 import { geminiPart, readUpload } from '@/server/upload';
-import { appFormat, ENKIDU_PROMPT } from '@/server/prompt';
+import { appFormat, ENKIDU_PROMPT, lengthRule } from '@/server/prompt';
+import { countWords, measureBooklet } from '@/lib/length-check';
 import { aiGate } from '@/server/supa';
 
 
@@ -91,7 +92,14 @@ export async function POST(request: Request) {
   const topics = n >= 1 && n <= 40 ? n : null;
   // The fixed prompt, unless this booklet has its own; the app format is always added.
   const own = typeof options.prompt === 'string' ? options.prompt.trim().slice(0, 8000) : '';
-  const prompt = (own || ENKIDU_PROMPT) + appFormat({ topics, perTopic });
+  // Shortening: 0 = none (the default). The app measures the result against the source and retries once if it is off.
+  const shorten = Math.min(90, Math.max(0, Math.round(Number(options.shorten) || 0)));
+  const sourceWords = upload.text !== null ? countWords(upload.text) : Number(options.sourceWords) > 0 ? Math.round(Number(options.sourceWords)) : null;
+  const basePrompt = (own || ENKIDU_PROMPT) + appFormat({ topics, perTopic });
+  // A second attempt sent by the app after it measured the first one (src/lib/length-check.ts).
+  const note = typeof options.retryNote === 'string' ? options.retryNote.slice(0, 4000) : '';
+  const askWords = Number(options.askWords) > 0 ? Math.round(Number(options.askWords)) : undefined;
+  const prompt = basePrompt + lengthRule(shorten, sourceWords, note, askWords);
   // The number of topics is also enforced by the response shape.
   const schema = topics ? { ...SCHEMA, properties: { ...SCHEMA.properties, topics: { ...SCHEMA.properties.topics, minItems: topics, maxItems: topics } } } : SCHEMA;
 
@@ -145,13 +153,17 @@ export async function POST(request: Request) {
   const booklet = clean(parsed, name);
   if (!booklet.topics.length) return json({ error: 'No readable content was found in this file.' }, 422);
   if (topics && booklet.topics.length > topics) booklet.topics = mergeTopics(booklet.topics, topics);
+
+  // Measured against the source (questions not counted); the app retries once when it is off.
+  const length = measureBooklet(booklet, { words: sourceWords, text: upload.text }, shorten);
+  const via = out.provider; // which model answered (shown in the app's log)
   // Each block keeps its PDF page number ("page") so the app can place the images it extracted.
   for (const t of booklet.topics)
     for (const b of t.blocks as { _page?: number; page?: number }[]) {
       b.page = b._page ?? 0;
       delete b._page;
     }
-  return json({ booklet, truncated: cand?.finishReason === 'MAX_TOKENS' });
+  return json({ booklet, truncated: cand?.finishReason === 'MAX_TOKENS', length, via });
 }
 
 // ---------- helpers ----------

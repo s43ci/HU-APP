@@ -4,7 +4,7 @@ import { File as FsFile } from 'expo-file-system';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Check, CircleAlert, FilePlus2, FileText, FileUp, Image as ImageIcon, Presentation, RefreshCw, ScrollText, ShieldCheck, PenLine, Sparkles, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Chip, EmptyState, Heading, Icon, SubjectThumb, TopBar, Txt } from '@/components/ui';
@@ -35,12 +35,15 @@ export default function ImportScreen() {
   const personal = !app.canUpload;
   const [file, setFile] = useState<DocumentPickerAsset | null>(null);
   const [opts, setOpts] = useState<ImportOptions>({ design: 'enhanced', questionsPerTopic: 5, subjectId: UPLOADS_SUBJECT.id });
-  const [state, setState] = useState<{ phase: 'idle' | 'working' | 'error'; error?: string; step: number }>({ phase: 'idle', step: 0 });
+  const [state, setState] = useState<{ phase: 'idle' | 'working' | 'error'; error?: string; step: number; retrying?: boolean }>({ phase: 'idle', step: 0 });
   const abort = useRef<AbortController | null>(null);
   // Number of topics (empty = like the file) and this booklet's own prompt (null = the fixed prompt).
   const [topicsText, setTopicsText] = useState('');
   const topicsCount = Math.min(40, Math.max(1, Number(topicsText) || 0));
   const [ownPrompt, setOwnPrompt] = useState<string | null>(null);
+  // Shortening in % (empty or 0 = no shortening: the AI only reorganises).
+  const [shortenText, setShortenText] = useState('');
+  const shorten = Math.min(90, Math.max(0, Number(shortenText) || 0));
   const [promptHeight, setPromptHeight] = useState(240);
 
   useEffect(() => {
@@ -110,12 +113,39 @@ export default function ImportScreen() {
     if (!file) return;
     setState({ phase: 'working', step: 0 });
     abort.current = new AbortController();
-    const timer = setTimeout(() => abort.current?.abort(), 5 * 60 * 1000);
+    // Up to two conversions (the app checks the first and may ask once more).
+    const timer = setTimeout(() => abort.current?.abort(), 9 * 60 * 1000);
     try {
-      const { booklet } = await convertFile(file, { ...opts, subjectId: personal ? UPLOADS_SUBJECT.id : opts.subjectId, unlimited: app.canUpload, topics: topicsText ? topicsCount : null, prompt: ownPrompt !== null && ownPrompt.trim() && ownPrompt.trim() !== ENKIDU_PROMPT.trim() ? ownPrompt : undefined }, abort.current.signal, (stage) => {
-        if (stage === 'images') setState((st) => ({ ...st, step: Math.max(st.step, 4) }));
+      const { booklet, length } = await convertFile(file, { ...opts, subjectId: personal ? UPLOADS_SUBJECT.id : opts.subjectId, unlimited: app.canUpload, topics: topicsText ? topicsCount : null, shorten, prompt: ownPrompt !== null && ownPrompt.trim() && ownPrompt.trim() !== ENKIDU_PROMPT.trim() ? ownPrompt : undefined }, abort.current.signal, (stage) => {
+        if (stage === 'images') setState((st) => ({ ...st, step: Math.max(st.step, 4), retrying: false }));
+        if (stage === 'retrying') setState((st) => ({ ...st, step: 2, retrying: true }));
       });
       app.addImported(booklet);
+      if (length) {
+        const n = (x: number) => x.toLocaleString('en-US');
+        const cov = length.coverage;
+        const miss = length.missing.slice(0, 12).join('، ');
+        const msg = IS_AR
+          ? [
+              `الأصل ${n(length.sourceWords)} كلمة ← الملزمة ${n(length.outputWords)} كلمة.`,
+              cov !== null ? `المعلومات المحفوظة: ${cov}% من مصطلحات الأصل وأرقامه.` : '',
+              length.shorten > 0 ? `الاختصار الفعلي ${Math.max(0, length.actualPct)}% (المطلوب ${length.shorten}%).` : 'بدون اختصار.',
+              length.retried ? 'أُعيد التحويل مرة ثانية تلقائياً لأن الأولى ابتعدت عن المطلوب.' : '',
+              length.restored ? `أُضيفت ${length.restored} جملة من الأصل كما هي، كان الذكاء الاصطناعي قد أسقطها (في نهاية مواضيعها تحت «تفاصيل إضافية من النص الأصلي»).` : '',
+              length.ok ? '' : `النتيجة ما زالت بعيدة عن المطلوب. يمكنك إعادة التحويل أو تعديل الملزمة.${length.shorten <= 0 && miss ? `\nمن الكلمات غير الموجودة: ${miss}` : ''}`,
+            ]
+          : [
+              `Source ${n(length.sourceWords)} words → booklet ${n(length.outputWords)} words.`,
+              cov !== null ? `Information kept: ${cov}% of the source's terms and numbers.` : '',
+              length.shorten > 0 ? `Actual shortening ${Math.max(0, length.actualPct)}% (asked ${length.shorten}%).` : 'No shortening.',
+              length.retried ? 'Converted a second time automatically, because the first result was off.' : '',
+              length.restored ? `${length.restored} sentences the AI left out were added back word for word (at the end of their topics, under "Additional details from the original").` : '',
+              length.ok ? '' : `Still off target. You can convert again or edit the booklet.${length.shorten <= 0 && miss ? `\nSome missing words: ${miss}` : ''}`,
+            ];
+        const text = msg.filter(Boolean).join('\n');
+        if (Platform.OS === 'web') window.alert(text);
+        else Alert.alert(IS_AR ? 'فحص الملزمة' : 'Booklet check', text);
+      }
       router.replace({ pathname: '/subject/[id]', params: { id: personal ? UPLOADS_SUBJECT.id : opts.subjectId ?? UPLOADS_SUBJECT.id, booklet: booklet.id } });
     } catch (e) {
       const aborted = (e as Error).name === 'AbortError';
@@ -154,6 +184,11 @@ export default function ImportScreen() {
                 </View>
               ))}
             </View>
+            {state.retrying ? (
+              <Txt size={Type.small} color={p.primary} style={{ marginTop: 14, textAlign: 'center' }}>
+                Checking against the original: a second pass to restore what was missing.
+              </Txt>
+            ) : null}
             <Txt faint size={Type.tiny} style={{ marginTop: 14, textAlign: 'center' }}>Long files take a minute or two. Keep the app open.</Txt>
           </View>
         ) : file ? (
@@ -227,8 +262,33 @@ export default function ImportScreen() {
               </View>
             </View>
 
+            {/* Shortening: 0 = none */}
+            <StepLabel n={personal ? 3 : 4} label="Shortening" done />
+            <View style={[styles.ask, { backgroundColor: p.surface }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <TextInput
+                    value={shortenText}
+                    onChangeText={(v) => setShortenText(v.replace(/[^0-9]/g, '').slice(0, 2))}
+                    keyboardType="number-pad"
+                    placeholder="0"
+                    placeholderTextColor={p.textFaint}
+                    style={[styles.number, { borderColor: shorten ? p.primary : p.border, color: p.text, fontFamily: Font.semibold }]}
+                  />
+                  <Txt weight="semibold" size={Type.h2}>%</Txt>
+                </View>
+                <Txt muted size={Type.small} style={{ flex: 1, lineHeight: 19 }}>
+                  {shorten
+                    ? IS_AR
+                      ? `يختصر الملزمة ${shorten}% ويحتفظ بنحو ${100 - shorten}% من طولها. يقاس الطول بعد التحويل ويُعاد إن ابتعد.`
+                      : `Shortens by ${shorten}%, keeping about ${100 - shorten}% of the length. The length is checked after converting.`
+                    : tt('0 = no shortening: the AI only reorganises, nothing is removed.')}
+                </Txt>
+              </View>
+            </View>
+
             {/* 4. Questions */}
-            <StepLabel n={personal ? 3 : 4} label="Questions per topic" done />
+            <StepLabel n={personal ? 4 : 5} label="Questions per topic" done />
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {[3, 5, 8].map((n) => (
                 <Chip key={n} label={`${n} questions`} active={opts.questionsPerTopic === n} onPress={() => setOpts({ ...opts, questionsPerTopic: n })} />

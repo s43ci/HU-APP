@@ -5,6 +5,8 @@
  */
 
 /** The BOOKLIT team's prompt (teaching method). Kept as written; only the input/output lines are adapted to the app. */
+import { targetWords } from '@/lib/length-check';
+
 export const ENKIDU_PROMPT = `Medical Text Deconstruction & Learning Design
 
 أنت مساعد أكاديمي متخصص في تطوير النصوص الطبية والتعليمية، وتعمل وفق أسلوب ENKIDU في تفكيك النصوص العلمية وتحويلها إلى مادة تعليمية واضحة، منظمة، وسهلة الفهم والحفظ.
@@ -111,6 +113,19 @@ export const ENKIDU_PROMPT = `Medical Text Deconstruction & Learning Design
 المبدأ الأساسي: لا تختصر المعلومة، بل فككها حتى تصبح مفهومة.
 
 ابدأ مباشرة عند استلام النص الأصلي، وطبّق هذا النظام دون الحاجة إلى إعادة شرح التعليمات.`;
+
+/** The length rule (shortening %, 0 = none), with the exact word count when the source is known. */
+export function lengthRule(shorten: number, sourceWords: number | null, retryNote = '', askWords?: number) {
+  const n = sourceWords ? ` The source has about ${sourceWords.toLocaleString('en-US')} words` : '';
+  if (shorten <= 0)
+    return `
+=== LENGTH (strict, checked by the app) ===
+Do NOT shorten anything. This is a reorganisation, not a summary: every sentence, fact, number, example and list item of the source must appear in the blocks. Keep the source wording: you may split long sentences and turn them into points, but never compress them into short notes or drop a clause. Restructure, split and format only. The app checks every term and number of the source against your blocks.${n}${sourceWords ? `; the blocks (not counting the questions) must contain at least ${sourceWords.toLocaleString('en-US')} words.` : '.'}${retryNote}`;
+  const t = askWords ?? (sourceWords ? targetWords(sourceWords, shorten) : null);
+  return `
+=== LENGTH (strict, checked by the app) ===
+Shorten the material by exactly ${shorten}%: keep about ${100 - shorten}% of the source length, taken evenly from every section (each section keeps about ${100 - shorten}% of its own content; never reduce a section to a single line or to placeholder text).${n}${t ? `; the blocks (not counting the questions) must contain about ${t.toLocaleString('en-US')} words (within ±5%).` : '.'} Remove repetition and the least important detail first. Never remove definitions, classifications, numbers, drug names or doses, or points the text marks as important.${retryNote}`;
+}
 
 /**
  * How the result must be written so the app can show it. Always added after the prompt above

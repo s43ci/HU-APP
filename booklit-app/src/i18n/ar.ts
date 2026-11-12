@@ -780,6 +780,9 @@ export const AR: Record<string, string> = {
   'Change prompt': 'تغيير البرومبت',
   'AI for students this month': 'الذكاء الاصطناعي للطلاب هذا الشهر',
   'Of which the BOOKLIT team (not counted in the budget)': 'منها لفريق BOOKLIT (لا تُحسب من الميزانية)',
+  'Shortening': 'نسبة الاختصار',
+  '0 = no shortening: the AI only reorganises, nothing is removed.': '0 = بدون اختصار: الذكاء الاصطناعي يرتّب ويفكّك فقط، ولا يحذف شيئاً.',
+  'Checking against the original: a second pass to restore what was missing.': 'مطابقة مع الأصل: جولة ثانية لإكمال ما نقص.',
 };
 
 /** Templates for strings that contain numbers. */
