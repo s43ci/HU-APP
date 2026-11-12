@@ -49,6 +49,11 @@ export type AiInput = {
   effort?: 'low' | 'medium' | 'high';
   /** Asked by the BOOKLIT team: metered apart, not counted in the students' AI budget. */
   staff?: boolean;
+  /**
+   * The PDF has pages with no text layer (scanned or pictures of text): only models that see the pages
+   * can read it, so the text-only backup (OpenRouter reads just the text layer) is skipped.
+   */
+  pagesAsImages?: boolean;
 };
 
 export type AiResult = { text: string; finish: string; provider: string };
@@ -258,10 +263,12 @@ function usable(r: AiResult, json: boolean) {
 /** Ask the AI: Gemini, then the backup Gemini model, then Claude. Throws AiError when all fail. */
 export async function runAi(input: AiInput): Promise<AiResult> {
   const steps: (() => Promise<AiResult>)[] = [() => askGemini(GEMINI_MODEL, input)];
-  if (input.backup !== false) steps.push(() => askGemini(GEMINI_BACKUP_MODEL, input));
-  if (process.env.OPENROUTER_API_KEY) steps.push(() => askOpenRouter(input));
+  // Pages without a text layer: the backup Gemini model (it sees the pages) takes the place of OpenRouter.
+  if (input.backup !== false || input.pagesAsImages) steps.push(() => askGemini(GEMINI_BACKUP_MODEL, input));
+  const openRouter = !!process.env.OPENROUTER_API_KEY && !input.pagesAsImages;
+  if (openRouter) steps.push(() => askOpenRouter(input));
   // Big files already used several of the host's ~8 outgoing calls on the upload: at most one backup provider then.
-  if (process.env.ANTHROPIC_API_KEY && (input.backup !== false || !process.env.OPENROUTER_API_KEY)) steps.push(() => askClaude(input));
+  if (process.env.ANTHROPIC_API_KEY && (input.backup !== false || !openRouter)) steps.push(() => askClaude(input));
   let last: AiError = new AiError(BUSY, 503);
   let lastResult: AiResult | null = null;
   for (const step of steps) {

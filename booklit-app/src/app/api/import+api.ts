@@ -126,6 +126,9 @@ export async function POST(request: Request) {
       maxTokens: 65536,
       temperature: 0.2,
       backup: !part.fileData,
+      // A PDF is read as text by the text-only backup; when the app found pages without text (scanned pages,
+      // pictures of text) or could not check, only models that see the pages are used.
+      pagesAsImages: upload.fileMime === 'application/pdf' && upload.text === null && !(Number(options.textPages) >= 0.9),
       effort: 'medium',
     });
   } catch (e) {

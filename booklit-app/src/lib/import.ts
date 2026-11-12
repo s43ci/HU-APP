@@ -157,13 +157,15 @@ export async function convertFile(
   // Word and PowerPoint files are checked by the server, which reads their text itself.
   const source = isPdfFile && bytes ? await pdfText(bytes) : undefined;
   const sourceText = source?.text;
+  // Share of pages that have real text (not only a header): below 90%, the server uses only AI models that see the pages.
+  const textPages = source ? source.pages.filter((t) => countWords(t) >= 25).length / Math.max(1, source.pages.length) : 0;
   const shorten = options.shorten ?? 0;
   type Reply = { booklet: ServerBooklet; truncated?: boolean; length?: LengthCheck | null; via?: string };
   const send = (extra: Record<string, unknown>) =>
     postFile<Reply>(
       '/api/import',
       asset,
-      { questionsPerTopic: options.questionsPerTopic, topics: options.topics ?? null, prompt: options.prompt || undefined, shorten, sourceWords: sourceText ? countWords(sourceText) : undefined, ...extra },
+      { questionsPerTopic: options.questionsPerTopic, topics: options.topics ?? null, prompt: options.prompt || undefined, shorten, sourceWords: sourceText ? countWords(sourceText) : undefined, textPages, ...extra },
       'upload',
       signal,
       bytes,
