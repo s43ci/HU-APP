@@ -778,6 +778,8 @@ export const AR: Record<string, string> = {
   'Every booklet uses it unless you change it here.': 'تستخدمه كل الملازم ما لم تغيّره هنا.',
   'Back to the fixed prompt': 'الرجوع للبرومبت الثابت',
   'Change prompt': 'تغيير البرومبت',
+  'AI for students this month': 'الذكاء الاصطناعي للطلاب هذا الشهر',
+  'Of which the BOOKLIT team (not counted in the budget)': 'منها لفريق BOOKLIT (لا تُحسب من الميزانية)',
 };
 
 /** Templates for strings that contain numbers. */

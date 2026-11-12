@@ -56,7 +56,7 @@ async function usageReport() {
   const days = usage.days;
   const storageMb = media / 1024 / 1024;
   const meters = [
-    { key: 'ai', label: 'AI (Gemini) this month', used: Math.round(t.ai.cost * 10000) / 10000, limit: limits.aiBudgetUsd, unit: 'USD' },
+    { key: 'ai', label: 'AI for students this month', used: Math.round((t.ai.cost - t.staffCost) * 10000) / 10000, limit: limits.aiBudgetUsd, unit: 'USD' },
     { key: 'hosting', label: 'Server requests (Expo Hosting)', used: t.requests, limit: limits.hostingRequests, unit: 'requests' },
     { key: 'storage', label: 'Uploaded images (Supabase)', used: Math.round(storageMb * 10) / 10, limit: limits.storageMb, unit: 'MB' },
     { key: 'accounts', label: 'Active accounts (Supabase)', used: t.activeUsers, limit: limits.accounts, unit: 'users' },
@@ -66,7 +66,7 @@ async function usageReport() {
   const daily = Object.entries(days)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([d, u]) => ({ day: d, requests: u.requests, ai: Object.values(u.ai).reduce((n, x) => n + (x?.cost ?? 0), 0), aiCalls: Object.values(u.ai).reduce((n, x) => n + (x?.calls ?? 0), 0) }));
-  return { needsFold, meters, alerts, limits, ai: t.ai, aiByKind: t.aiByKind, platforms: { web: t.web, android: t.android, ios: t.ios }, daily };
+  return { needsFold, meters, alerts, limits, staffCost: t.staffCost, ai: t.ai, aiByKind: t.aiByKind, platforms: { web: t.web, android: t.android, ios: t.ios }, daily };
 }
 
 export const OPTIONS = optionsHandler;

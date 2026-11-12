@@ -47,6 +47,8 @@ export type AiInput = {
   backup?: boolean;
   /** Claude thinking effort: low for quick replies, medium for building booklets. */
   effort?: 'low' | 'medium' | 'high';
+  /** Asked by the BOOKLIT team: metered apart, not counted in the students' AI budget. */
+  staff?: boolean;
 };
 
 export type AiResult = { text: string; finish: string; provider: string };
@@ -98,7 +100,7 @@ async function askGemini(model: string, input: AiInput): Promise<AiResult> {
     candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
     usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number };
   };
-  await countAi(input.kind, data.usageMetadata, GEMINI_PRICES[model]);
+  await countAi(input.kind, data.usageMetadata, GEMINI_PRICES[model], input.staff);
   const cand = data.candidates?.[0];
   const text = (cand?.content?.parts ?? []).map((p) => p.text ?? '').join('');
   return { text, finish: cand?.finishReason ?? '', provider: model };
@@ -154,7 +156,7 @@ async function askOpenRouter(input: AiInput): Promise<AiResult> {
     error?: { message?: string };
   };
   if (data.error || !data.choices?.length) throw new AiError(BUSY, 503);
-  await countAi(input.kind, { promptTokenCount: data.usage?.prompt_tokens, candidatesTokenCount: data.usage?.completion_tokens }, { in: 0, out: 0 });
+  await countAi(input.kind, { promptTokenCount: data.usage?.prompt_tokens, candidatesTokenCount: data.usage?.completion_tokens }, { in: 0, out: 0 }, input.staff);
   const c = data.choices[0];
   let text = (c.message?.content ?? '').replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
   // Some free models wrap the JSON in a sentence: keep only the JSON object.
@@ -228,7 +230,7 @@ async function askClaude(input: AiInput): Promise<AiResult> {
     throw new AiError(BUSY, 503);
   }
   const prices = CLAUDE_PRICES[CLAUDE_MODEL] ?? CLAUDE_PRICES['claude-opus-5-5'];
-  await countAi(input.kind, { promptTokenCount: msg.usage.input_tokens, candidatesTokenCount: msg.usage.output_tokens }, prices);
+  await countAi(input.kind, { promptTokenCount: msg.usage.input_tokens, candidatesTokenCount: msg.usage.output_tokens }, prices, input.staff);
   const text = msg.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
   const finish = msg.stop_reason === 'max_tokens' ? 'MAX_TOKENS' : msg.stop_reason === 'refusal' ? 'SAFETY' : 'STOP';
   return { text, finish, provider: CLAUDE_MODEL };
@@ -277,7 +279,7 @@ export async function runAi(input: AiInput): Promise<AiResult> {
 }
 
 /** Ask for JSON in the given shape (translate, editor tools, question writing). */
-export async function geminiJson<T>(opts: { system: string; parts: Record<string, unknown>[]; schema: unknown; maxTokens?: number; temperature?: number; kind?: AiKind }): Promise<T> {
+export async function geminiJson<T>(opts: { system: string; parts: Record<string, unknown>[]; schema: unknown; maxTokens?: number; temperature?: number; kind?: AiKind; staff?: boolean }): Promise<T> {
   // Gemini -> backup Gemini model -> Claude.
   try {
     const r = await runAi({
@@ -288,6 +290,7 @@ export async function geminiJson<T>(opts: { system: string; parts: Record<string
       maxTokens: opts.maxTokens ?? 8192,
       temperature: opts.temperature,
       effort: 'low',
+      staff: opts.staff,
     });
     return JSON.parse(r.text) as T;
   } catch (e) {

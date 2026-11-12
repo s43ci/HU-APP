@@ -12,6 +12,7 @@ type Meter = { key: string; label: string; used: number; limit: number; unit: st
 type Limits = { aiBudgetUsd: number; hostingRequests: number; storageMb: number; accounts: number; androidMau: number };
 type Report = {
   needsFold?: boolean;
+  staffCost?: number;
   meters: Meter[];
   limits: Limits;
   ai: { calls: number; cost: number; inTok: number; outTok: number };
@@ -102,6 +103,10 @@ export function Usage() {
         ) : (
           <Txt faint size={Type.small}>No AI use yet this month.</Txt>
         )}
+        <View style={[styles.line, { marginTop: 6 }]}>
+          <Txt muted size={Type.small} style={{ flex: 1 }}>Of which the BOOKLIT team (not counted in the budget)</Txt>
+          <Txt weight="medium" size={Type.small}>{fmt(r.staffCost ?? 0, 'USD')}</Txt>
+        </View>
         <Txt faint size={Type.tiny} style={{ marginTop: 4 }}>
           {IS_AR
             ? `${(r.ai.inTok / 1e6).toFixed(2)} مليون رمز إدخال · ${(r.ai.outTok / 1e6).toFixed(2)} مليون رمز إخراج`

@@ -35,8 +35,8 @@ export function OPTIONS() {
 }
 
 export async function POST(request: Request) {
-  const denied = await aiGate(request, 'files');
-  if (denied) return denied;
+  const gate = await aiGate(request, 'files');
+  if (gate.denied) return gate.denied;
   const key = process.env.GEMINI_API_KEY;
   if (!key) return json({ error: 'The AI service is not configured.' }, 500);
   const read = await readUpload(request);
@@ -71,6 +71,7 @@ ${topics.map((t: { id: string; title: string }) => `${t.id} = ${t.title}`).join(
   let out: AiResult;
   try {
     out = await runAi({
+      staff: gate.staff,
       kind: 'bank',
       system,
       messages: [{ role: 'user', text: 'Extract and assign all questions.' }],

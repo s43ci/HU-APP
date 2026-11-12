@@ -29,8 +29,8 @@ export function OPTIONS() {
 }
 
 export async function POST(request: Request) {
-  const denied = await aiGate(request, 'user');
-  if (denied) return denied;
+  const gate = await aiGate(request, 'user');
+  if (gate.denied) return gate.denied;
   const key = process.env.GEMINI_API_KEY;
   if (!key) return json({ error: 'AI service is not configured' }, 500);
 
@@ -52,6 +52,7 @@ export async function POST(request: Request) {
   try {
     // Gemini -> backup Gemini model -> Claude, so a busy model does not stop the student.
     const r = await runAi({
+      staff: gate.staff,
       kind: 'ask',
       system: `${SYSTEM}\n\n${context}`,
       messages: history.map((m) => ({ role: m.role, text: m.content.slice(0, 4000) })),

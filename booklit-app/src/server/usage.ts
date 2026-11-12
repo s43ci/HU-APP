@@ -4,9 +4,9 @@
  * The host allows only ~8 outgoing calls per request, so usage is stored as tiny empty files whose
  * NAMES carry the numbers (usage/e/<month>/...): one list call reads up to 1,000 of them. From time
  * to time they are folded into a monthly summary (usage/month/<month>.json) and removed.
- *   r~<day>~<count>~<id>                              API requests (saved in batches)
- *   a~<day>~<kind>~<micro-USD>~<in-tokens>~<out-tokens>~<id>   one AI call
- *   u~<platform>~<user id>                            an active user this month (same name = counted once)
+ *   r_<day>_<count>_<id>                              API requests (saved in batches)
+ *   a_<day>_<kind>_<micro-USD>_<in-tokens>_<out-tokens>_<id>   one AI call
+ *   u_<platform>_<user id>                            an active user this month (same name = counted once)
  */
 import { getJson, listObjects, putJson, putMarker, removeObjects } from './supa';
 
@@ -16,7 +16,8 @@ const PRICE_OUT = 2.5;
 
 export type AiKind = 'ask' | 'edit' | 'mcq' | 'import' | 'bank';
 type AiStat = { calls: number; inTok: number; outTok: number; cost: number };
-type Day = { requests: number; ai: Partial<Record<AiKind, AiStat>> };
+/** staffCost: AI spent by the BOOKLIT team (shown on the Usage page, not counted in the students' budget). */
+type Day = { requests: number; ai: Partial<Record<AiKind, AiStat>>; staffCost?: number };
 export type MonthUsage = { days: Record<string, Day>; users: Record<string, string[]> };
 
 export type Limits = {
@@ -54,7 +55,7 @@ export async function countRequest(canSave = true) {
   pending = 0;
   lastFlush = Date.now();
   try {
-    await putMarker(`${dir()}/r~${day()}~${n}~${rid()}`);
+    await putMarker(`${dir()}/r_${day()}_${n}_${rid()}`);
   } catch {
     pending += n;
   }
@@ -67,19 +68,19 @@ export async function countUser(id: string, platform: string | null) {
     seenUsers.clear();
   }
   const p = platform === 'android' || platform === 'ios' ? platform : 'web';
-  const key = `${p}~${id}`;
+  const key = `${p}_${id}`;
   if (seenUsers.has(key)) return;
   seenUsers.add(key);
-  await putMarker(`${dir()}/u~${key}`).catch(() => seenUsers.delete(key));
+  await putMarker(`${dir()}/u_${key}`).catch(() => seenUsers.delete(key));
 }
 
 /** Record one Gemini call from its usageMetadata. */
-export async function countAi(kind: AiKind, meta?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number }, price?: { in: number; out: number }) {
+export async function countAi(kind: AiKind, meta?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number }, price?: { in: number; out: number }, staff = false) {
   const inTok = meta?.promptTokenCount ?? 0;
   const outTok = (meta?.candidatesTokenCount ?? 0) + (meta?.thoughtsTokenCount ?? 0);
   const cost = (inTok * (price?.in ?? PRICE_IN) + outTok * (price?.out ?? PRICE_OUT)) / 1_000_000;
-  if (monthCache) monthCache.cost += cost;
-  await putMarker(`${dir()}/a~${day()}~${kind}~${Math.round(cost * 1e6)}~${inTok}~${outTok}~${rid()}`).catch(() => {});
+  if (monthCache && !staff) monthCache.cost += cost;
+  await putMarker(`${dir()}/a_${day()}_${kind}_${Math.round(cost * 1e6)}_${inTok}_${outTok}_${rid()}${staff ? '_s' : ''}`).catch(() => {});
 }
 
 const emptyMonth = (): MonthUsage => ({ days: {}, users: {} });
@@ -87,7 +88,7 @@ const emptyMonth = (): MonthUsage => ({ days: {}, users: {} });
 /** Add the events in these file names to a month summary. */
 function addEvents(m: MonthUsage, names: string[]) {
   for (const name of names) {
-    const f = name.split('~');
+    const f = name.split('_');
     if (f[0] === 'r') {
       const d = (m.days[f[1]] ??= { requests: 0, ai: {} });
       d.requests += Number(f[2]) || 0;
@@ -98,6 +99,7 @@ function addEvents(m: MonthUsage, names: string[]) {
       s.cost += (Number(f[3]) || 0) / 1e6;
       s.inTok += Number(f[4]) || 0;
       s.outTok += Number(f[5]) || 0;
+      if (f[7] === 's') d.staffCost = (d.staffCost ?? 0) + (Number(f[3]) || 0) / 1e6;
     } else if (f[0] === 'u') {
       const list = (m.users[f[1]] ??= []);
       if (!list.includes(f[2])) list.push(f[2]);
@@ -133,8 +135,10 @@ export function totals(u: MonthUsage) {
   const ai = { calls: 0, cost: 0, inTok: 0, outTok: 0 };
   const aiByKind: Partial<Record<AiKind, AiStat>> = {};
   let requests = 0;
+  let staffCost = 0;
   for (const d of days) {
     requests += d.requests;
+    staffCost += d.staffCost ?? 0;
     for (const [k, s] of Object.entries(d.ai) as [AiKind, AiStat][]) {
       const x = (aiByKind[k] ??= { calls: 0, inTok: 0, outTok: 0, cost: 0 });
       x.calls += s.calls;
@@ -148,7 +152,7 @@ export function totals(u: MonthUsage) {
     }
   }
   const users = new Set(Object.values(u.users).flat());
-  return { requests, ai, aiByKind, activeUsers: users.size, android: (u.users.android ?? []).length, ios: (u.users.ios ?? []).length, web: (u.users.web ?? []).length };
+  return { requests, ai, aiByKind, staffCost, activeUsers: users.size, android: (u.users.android ?? []).length, ios: (u.users.ios ?? []).length, web: (u.users.web ?? []).length };
 }
 
 // Cached month AI cost so AI requests can check the budget cheaply (refreshed at most every 5 minutes).
@@ -157,7 +161,9 @@ export async function monthAiCost(canRefresh = true): Promise<number> {
   if (monthCache && (Date.now() - monthCache.at < 5 * 60_000 || !canRefresh)) return monthCache.cost;
   if (!canRefresh) return 0;
   try {
-    const cost = totals((await monthUsage()).usage).ai.cost;
+    // The students' budget: everything except what the BOOKLIT team spent (their uploads).
+    const t = totals((await monthUsage()).usage);
+    const cost = t.ai.cost - t.staffCost;
     monthCache = { at: Date.now(), cost };
     return cost;
   } catch {

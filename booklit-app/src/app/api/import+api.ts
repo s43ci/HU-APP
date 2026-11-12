@@ -77,8 +77,8 @@ export function OPTIONS() {
 }
 
 export async function POST(request: Request) {
-  const denied = await aiGate(request, 'files');
-  if (denied) return denied;
+  const gate = await aiGate(request, 'files');
+  if (gate.denied) return gate.denied;
   const key = process.env.GEMINI_API_KEY;
   if (!key) return json({ error: 'The conversion service is not configured.' }, 500);
 
@@ -109,6 +109,7 @@ export async function POST(request: Request) {
   let out: AiResult;
   try {
     out = await runAi({
+      staff: gate.staff,
       kind: 'import',
       system: prompt,
       messages: [{ role: 'user', text: topics ? `Convert this file into the booklet JSON with exactly ${topics} topics.` : 'Convert this file into the booklet JSON.' }],

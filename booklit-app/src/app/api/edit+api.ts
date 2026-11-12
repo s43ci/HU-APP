@@ -25,8 +25,8 @@ export function OPTIONS() {
 }
 
 export async function POST(request: Request) {
-  const denied = await aiGate(request, 'user');
-  if (denied) return denied;
+  const gate = await aiGate(request, 'user');
+  if (gate.denied) return gate.denied;
   let body: { action?: Action; text?: string; topic?: string };
   try {
     body = await request.json();
@@ -41,6 +41,7 @@ export async function POST(request: Request) {
   const wantsItems = action === 'bullets';
   try {
     const out = await geminiJson<{ text?: string; items?: string[] }>({
+      staff: gate.staff,
       system: `You edit study material for BOOKLIT, a dental education app.\n${INSTRUCTIONS[action]}\nReturn JSON: ${wantsItems ? '"items" = the bullet points, "text" = ""' : '"text" = the result as plain text (no Markdown), "items" = []'}.`,
       parts: [{ text: `${body.topic ? `Topic: ${body.topic}\n\n` : ''}Text:\n${text}` }],
       schema: SCHEMA,

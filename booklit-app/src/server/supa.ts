@@ -324,19 +324,20 @@ export const optionsHandler = () => new Response(null, { headers: CORS });
  * 'user': any signed-in, non-blocked account. 'files': Premium students and staff who can upload.
  * Returns an error Response, or null when allowed.
  */
-export async function aiGate(request: Request, level: 'user' | 'files'): Promise<Response | null> {
+export async function aiGate(request: Request, level: 'user' | 'files'): Promise<{ denied: Response | null; staff: boolean }> {
   try {
     await countRequest(false).catch(() => {});
     const a = await requireUser(request);
-    if (level === 'files' && !(a.plan === 'premium' || can(a, 'content'))) return json({ error: 'Converting your own files is part of Premium.' }, 403);
+    const deny = (r: Response) => ({ denied: r, staff: false });
+    if (level === 'files' && !(a.plan === 'premium' || can(a, 'content'))) return deny(json({ error: 'Converting your own files is part of Premium.' }, 403));
     // Monthly AI budget set by the admin: when it is used up, AI pauses for students (staff keep it).
     // File routes (conversion) only use what is already cached: they need their few outgoing calls for the file.
     if (!isStaff(a) && (level === 'user' || limitsCache)) {
       if (level === 'user') limitsCache = limitsCache && Date.now() - limitsCache.at < 5 * 60_000 ? limitsCache : { at: Date.now(), value: await getLimits() };
-      if ((await monthAiCost(level === 'user')) >= (limitsCache?.value.aiBudgetUsd ?? Infinity)) return json({ error: 'AI is paused for the rest of this month (usage limit reached). It comes back automatically next month.' }, 429);
+      if ((await monthAiCost(level === 'user')) >= (limitsCache?.value.aiBudgetUsd ?? Infinity)) return deny(json({ error: 'AI is paused for the rest of this month (usage limit reached). It comes back automatically next month.' }, 429));
     }
-    return null;
+    return { denied: null, staff: isStaff(a) };
   } catch (e) {
-    return json({ error: (e as Error).message }, e instanceof HttpError ? e.status : 401);
+    return { denied: json({ error: (e as Error).message }, e instanceof HttpError ? e.status : 401), staff: false };
   }
 }
