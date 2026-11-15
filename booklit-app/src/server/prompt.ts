@@ -124,7 +124,7 @@ Do NOT shorten anything. This is a reorganisation, not a summary: every sentence
   const t = askWords ?? (sourceWords ? targetWords(sourceWords, shorten) : null);
   return `
 === LENGTH (strict, checked by the app) ===
-Shorten the material by exactly ${shorten}%: keep about ${100 - shorten}% of the source length, taken evenly from every section (each section keeps about ${100 - shorten}% of its own content; never reduce a section to a single line or to placeholder text).${n}${t ? `; the blocks (not counting the questions) must contain about ${t.toLocaleString('en-US')} words (within ±5%).` : '.'} Remove repetition and the least important detail first. Never remove definitions, classifications, numbers, drug names or doses, or points the text marks as important.${retryNote}`;
+The user asked for a SHORTER booklet. This overrides the rules above about keeping every detail and not shortening: those apply to the information you keep, not to how much you keep. Shorten the material by exactly ${shorten}%: keep about ${100 - shorten}% of the source length, taken evenly from every section (each section keeps about ${100 - shorten}% of its own content; never reduce a section to a single line or to placeholder text).${n}${t ? `; the blocks (not counting the questions) must contain about ${t.toLocaleString('en-US')} words (within ±5%).` : '.'} Remove repetition and the least important detail first. Never remove definitions, classifications, numbers, drug names or doses, or points the text marks as important.${retryNote}`;
 }
 
 /**

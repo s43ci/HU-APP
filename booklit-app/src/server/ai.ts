@@ -1,6 +1,8 @@
 /**
  * One way to ask the AI, with automatic backups (server only).
  *
+ *   AI_PRIMARY=claude (and ANTHROPIC_API_KEY set): Claude first, then Gemini (main, backup), then OpenRouter.
+ *   Otherwise:
  *   1. Gemini (main model)
  *   2. Gemini (backup model, separate capacity) — when the request can afford one more outgoing call
  *   3. OpenRouter (free models) — only if OPENROUTER_API_KEY is set
@@ -9,7 +11,7 @@
  * The next one is tried when the previous is busy (429 / 5xx / network), or its answer is unusable
  * (empty, stopped by a filter, or not the JSON asked for). Every call is metered for the Usage page.
  */
-import Anthropic from '@anthropic-ai/sdk';
+import Anthropic, { toFile } from '@anthropic-ai/sdk';
 
 import { fetchWithRetry, GeminiError, GEMINI_MODEL } from './gemini';
 import { countAi, type AiKind } from './usage';
@@ -38,7 +40,13 @@ export type AiInput = {
   /** The conversation; the last message is the user's request. */
   messages: { role: 'user' | 'assistant'; text: string }[];
   /** A file sent with the last user message. */
-  file?: { geminiPart: Record<string, unknown>; bytes: Uint8Array; mime: string; text: string | null };
+  file?: {
+    /** The file as a Gemini part; a function when it is made only if Gemini is asked (big files are uploaded to Gemini first). */
+    geminiPart: Record<string, unknown> | (() => Promise<Record<string, unknown>>);
+    bytes: Uint8Array;
+    mime: string;
+    text: string | null;
+  };
   /** JSON shape of the answer (Gemini format; converted for Claude). */
   schema?: GSchema;
   maxTokens: number;
@@ -54,6 +62,8 @@ export type AiInput = {
    * can read it, so the text-only backup (OpenRouter reads just the text layer) is skipped.
    */
   pagesAsImages?: boolean;
+  /** Ask Gemini first even when Claude is the main model (Gemini follows a shortening % better). */
+  preferGemini?: boolean;
 };
 
 export type AiResult = { text: string; finish: string; provider: string };
@@ -73,9 +83,11 @@ async function askGemini(model: string, input: AiInput): Promise<AiResult> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new AiError('The AI service is not configured.', 500);
   if (simulateBusy(model)) throw new AiError(BUSY, 503);
+  const gp = input.file?.geminiPart;
+  const part = typeof gp === 'function' ? await gp() : gp;
   const contents = input.messages.map((m, i) => ({
     role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [...(input.file && i === input.messages.length - 1 ? [input.file.geminiPart] : []), { text: m.text }],
+    parts: [...(part && i === input.messages.length - 1 ? [part] : []), { text: m.text }],
   }));
   let res: Response;
   try {
@@ -197,44 +209,60 @@ async function askClaude(input: AiInput): Promise<AiResult> {
   // maxRetries 0: each retry would be one more outgoing call, and the host allows only a few per request.
   claude ??= new Anthropic({ apiKey, maxRetries: 0 });
 
-  const fileBlock = (): Anthropic.Beta.BetaContentBlockParam[] => {
+  if (simulateBusy(CLAUDE_MODEL)) throw new AiError(BUSY, 503);
+  const fileBlock = async (): Promise<Anthropic.Beta.BetaContentBlockParam[]> => {
     const f = input.file;
     if (!f) return [];
     if (f.text !== null) return [{ type: 'text', text: f.text }];
+    const isPdf = f.mime === 'application/pdf';
+    const isImage = /^image\/(jpeg|png|gif|webp)$/.test(f.mime);
+    if (!isPdf && !isImage) return [];
+    // Big files go through Claude's file upload (no base64 work on this server, which the host's CPU limit punishes).
+    if (f.bytes.length > 3 * 1024 * 1024) {
+      const meta = await claude!.files.upload({ file: await toFile(f.bytes, isPdf ? 'file.pdf' : 'image', { type: f.mime }) });
+      return isPdf ? [{ type: 'document', source: { type: 'file', file_id: meta.id } }] : [{ type: 'image', source: { type: 'file', file_id: meta.id } }];
+    }
     const data = toB64(f.bytes);
-    if (f.mime === 'application/pdf') return [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data } }];
-    if (/^image\/(jpeg|png|gif|webp)$/.test(f.mime))
-      return [{ type: 'image', source: { type: 'base64', media_type: f.mime as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp', data } }];
-    return [];
+    if (isPdf) return [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data } }];
+    return [{ type: 'image', source: { type: 'base64', media_type: f.mime as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp', data } }];
   };
+  let block: Anthropic.Beta.BetaContentBlockParam[];
+  try {
+    block = await fileBlock();
+  } catch {
+    throw new AiError(BUSY, 503);
+  }
   const messages: Anthropic.Beta.BetaMessageParam[] = input.messages.map((m, i) => ({
     role: m.role,
-    content: i === input.messages.length - 1 && m.role === 'user' ? [...fileBlock(), { type: 'text', text: m.text }] : m.text,
+    content: i === input.messages.length - 1 && m.role === 'user' ? [...block, { type: 'text', text: m.text }] : m.text,
   }));
 
   const params = {
     model: CLAUDE_MODEL,
-    max_tokens: input.maxTokens,
+    // Whole booklets: Claude can write up to 128K tokens in one answer (twice Gemini's limit).
+    max_tokens: input.kind === 'import' ? Math.max(input.maxTokens, 128_000) : input.maxTokens,
     system: input.system,
     messages,
     output_config: {
       effort: input.effort ?? 'medium',
       ...(input.schema ? { format: { type: 'json_schema' as const, schema: toJsonSchema(input.schema) } } : {}),
     },
-    // If Claude declines on a safety classifier, the API re-runs the request on a suitable model.
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default' as const,
+    // If Claude declines on a safety classifier, the API re-runs the request on a suitable model
+    // (Opus, Sonnet and Fable only: Haiku has no server-side fallback).
+    ...(/haiku/.test(CLAUDE_MODEL) ? {} : { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const }),
   };
   let msg: Anthropic.Beta.BetaMessage;
   try {
     // Long answers (whole booklets) are streamed so the request does not time out.
-    msg = input.maxTokens > 16000 ? await claude.beta.messages.stream(params).finalMessage() : await claude.beta.messages.create(params);
+    msg = params.max_tokens > 16000 ? await claude.beta.messages.stream(params).finalMessage() : await claude.beta.messages.create(params);
   } catch (e) {
     if (e instanceof Anthropic.RateLimitError || e instanceof Anthropic.InternalServerError || e instanceof Anthropic.APIConnectionError) throw new AiError(BUSY, 503);
     if (e instanceof Anthropic.APIError) throw new AiError(`Backup AI error (${e.status ?? 'network'}).`, 502);
     throw new AiError(BUSY, 503);
   }
-  const prices = CLAUDE_PRICES[CLAUDE_MODEL] ?? CLAUDE_PRICES['claude-opus-5-5'];
+  let prices = CLAUDE_PRICES[CLAUDE_MODEL] ?? CLAUDE_PRICES['claude-opus-5-5'];
+  // Haiku 5.5 costs 5x more for prompts over 100K tokens.
+  if (/haiku-5-5/.test(CLAUDE_MODEL) && msg.usage.input_tokens > 100_000) prices = { in: 0.5, out: 2.5 };
   await countAi(input.kind, { promptTokenCount: msg.usage.input_tokens, candidatesTokenCount: msg.usage.output_tokens }, prices, input.staff);
   const text = msg.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
   const finish = msg.stop_reason === 'max_tokens' ? 'MAX_TOKENS' : msg.stop_reason === 'refusal' ? 'SAFETY' : 'STOP';
@@ -262,6 +290,14 @@ function usable(r: AiResult, json: boolean) {
 
 /** Ask the AI: Gemini, then the backup Gemini model, then Claude. Throws AiError when all fail. */
 export async function runAi(input: AiInput): Promise<AiResult> {
+  const claudeKey = !!process.env.ANTHROPIC_API_KEY;
+  if (claudeKey && process.env.AI_PRIMARY === 'claude' && !input.preferGemini) {
+    // Claude first. Big files: Claude's upload + answer use the host's call budget, so only the main Gemini model after it.
+    const steps: (() => Promise<AiResult>)[] = [() => askClaude(input), () => askGemini(GEMINI_MODEL, input)];
+    if (input.backup !== false) steps.push(() => askGemini(GEMINI_BACKUP_MODEL, input));
+    if (input.backup !== false && process.env.OPENROUTER_API_KEY && !input.pagesAsImages) steps.push(() => askOpenRouter(input));
+    return runSteps(steps, input);
+  }
   const steps: (() => Promise<AiResult>)[] = [() => askGemini(GEMINI_MODEL, input)];
   // Pages without a text layer: the backup Gemini model (it sees the pages) takes the place of OpenRouter.
   if (input.backup !== false || input.pagesAsImages) steps.push(() => askGemini(GEMINI_BACKUP_MODEL, input));
@@ -269,6 +305,11 @@ export async function runAi(input: AiInput): Promise<AiResult> {
   if (openRouter) steps.push(() => askOpenRouter(input));
   // Big files already used several of the host's ~8 outgoing calls on the upload: at most one backup provider then.
   if (process.env.ANTHROPIC_API_KEY && (input.backup !== false || !openRouter)) steps.push(() => askClaude(input));
+  return runSteps(steps, input);
+}
+
+/** Try each provider in turn until one gives a usable answer. */
+async function runSteps(steps: (() => Promise<AiResult>)[], input: AiInput): Promise<AiResult> {
   let last: AiError = new AiError(BUSY, 503);
   let lastResult: AiResult | null = null;
   for (const step of steps) {

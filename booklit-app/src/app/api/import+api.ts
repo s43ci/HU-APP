@@ -104,13 +104,10 @@ export async function POST(request: Request) {
   const schema = topics ? { ...SCHEMA, properties: { ...SCHEMA.properties, topics: { ...SCHEMA.properties.topics, minItems: topics, maxItems: topics } } } : SCHEMA;
 
   // Images are extracted by the app itself (src/lib/pdf-images.ts), so the server only forwards the file.
-  let part: Record<string, unknown>;
-  let cleanup = async () => {};
-  try {
-    ({ part, cleanup } = await geminiPart(upload, key));
-  } catch (e) {
-    return json({ error: (e as Error).message || 'Could not send the file to the AI service.' }, 502);
-  }
+  // The Gemini copy of the file is made only if Gemini is asked (Claude may answer first).
+  const big = upload.text === null && upload.bytes.length > 3 * 1024 * 1024;
+  let made: Promise<Record<string, unknown>> | null = null;
+  const part = () => (made ??= geminiPart(upload, key).then((r) => r.part));
 
   // Gemini -> backup Gemini model -> Claude. Big files (sent through Gemini's file upload) skip the
   // backup Gemini model: the host allows only ~8 outgoing calls per request and the upload uses some.
@@ -125,14 +122,16 @@ export async function POST(request: Request) {
       schema: schema as GSchema,
       maxTokens: 65536,
       temperature: 0.2,
-      backup: !part.fileData,
+      backup: !big,
+      // Shortening: Gemini first. It tends to cut more than asked, and the app then adds back source
+      // sentences up to the exact length; Claude keeps nearly everything, which suits 0% best.
+      preferGemini: shorten > 0,
       // A PDF is read as text by the text-only backup; when the app found pages without text (scanned pages,
       // pictures of text) or could not check, only models that see the pages are used.
       pagesAsImages: upload.fileMime === 'application/pdf' && upload.text === null && !(Number(options.textPages) >= 0.9),
       effort: 'medium',
     });
   } catch (e) {
-    await cleanup();
     const err = e as AiError;
     const why =
       err.finish === 'MAX_TOKENS'
@@ -144,7 +143,6 @@ export async function POST(request: Request) {
             : err.message;
     return json({ error: why, detail: err.finish ? `finishReason: ${err.finish}` : undefined }, err.status ?? 503);
   }
-  await cleanup();
   let parsed: RawBooklet;
   try {
     parsed = JSON.parse(out.text) as RawBooklet;
