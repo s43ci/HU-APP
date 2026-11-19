@@ -5,7 +5,9 @@ import { AppState, useColorScheme } from 'react-native';
 import { DarkPalette, LightPalette, type Palette, type ReaderTheme } from '@/constants/theme';
 import { setImportedContent, setUniversity, subjects } from '@/data/content';
 import { api, getSession, onSessionChange, setSession, type Account, type PlanConfig, type Session, type SubRequest } from '@/lib/api';
+import { loadBig, saveBig } from '@/lib/big-store';
 import { deleteBookletImages } from '@/lib/editor';
+import { logError } from '@/lib/log';
 import { DEFAULT_READER_PREFS, type Mark, type ReaderPrefs, type Role, type Stroke } from '@/data/annotations';
 import { EMPTY_CATALOG, type Catalog, type ImportedBooklet, type Mcq, type StageId } from '@/data/types';
 
@@ -107,6 +109,13 @@ const DEFAULTS: Persisted = {
 };
 
 const KEY = 'booklit.state.v1';
+/**
+ * The big parts of the state are saved apart (src/lib/big-store.ts): together they outgrow the ~5 MB
+ * the small store allows on the web (and AsyncStorage's limits on Android), and saving then fails
+ * silently, which lost booklets added after the limit was reached.
+ */
+const BIG = ['importedBooklets', 'published', 'extraMcqs'] as const;
+type BigKey = (typeof BIG)[number];
 
 type Store = Persisted & {
   ready: boolean;
@@ -183,23 +192,60 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const scheme = useColorScheme();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // What is saved in the big store (by reference, so unchanged parts are not written again).
+  const savedBig = useRef<Partial<Record<BigKey, unknown>>>({});
+  // Big parts that could not be read this time: never overwritten, so nothing is lost by a failed read.
+  const bigUnreadable = useRef(new Set<BigKey>());
+
   useEffect(() => {
-    AsyncStorage.getItem(KEY)
-      .then((raw) => {
-        if (!raw) return;
-        const saved = { ...DEFAULTS, ...JSON.parse(raw) } as Persisted;
-        setSession(saved.session);
-        setState(saved);
-      })
-      .catch(() => {})
-      .finally(() => setReady(true));
+    (async () => {
+      let saved: Persisted = DEFAULTS;
+      try {
+        const raw = await AsyncStorage.getItem(KEY);
+        if (raw) saved = { ...DEFAULTS, ...JSON.parse(raw) } as Persisted;
+      } catch (e) {
+        logError('storage', e, { step: 'load' });
+      }
+      for (const k of BIG) {
+        try {
+          const v = await loadBig(`state.${k}`);
+          if (v !== null) {
+            const parsed = JSON.parse(v) as Persisted[BigKey];
+            (saved as Record<BigKey, unknown>)[k] = parsed;
+            savedBig.current[k] = parsed;
+          }
+          // Nothing in the big store yet: the value from the small store (older versions) moves over on the next save.
+        } catch (e) {
+          bigUnreadable.current.add(k);
+          logError('storage', e, { step: 'load-big', key: k });
+        }
+      }
+      setSession(saved.session);
+      setState(saved);
+    })().finally(() => setReady(true));
   }, []);
 
   useEffect(() => {
     if (!ready) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      AsyncStorage.setItem(KEY, JSON.stringify(state)).catch(() => {});
+      void (async () => {
+        const small: Record<string, unknown> = { ...state };
+        for (const k of BIG) {
+          if (bigUnreadable.current.has(k)) continue; // keep what the small store had
+          if (savedBig.current[k] !== state[k]) {
+            try {
+              await saveBig(`state.${k}`, JSON.stringify(state[k]));
+              savedBig.current[k] = state[k];
+            } catch (e) {
+              logError('storage', e, { step: 'save-big', key: k });
+            }
+          }
+          // Saved in the big store: the small store keeps only the empty default.
+          if (savedBig.current[k] === state[k]) small[k] = DEFAULTS[k];
+        }
+        await AsyncStorage.setItem(KEY, JSON.stringify(small)).catch((e) => logError('storage', e, { step: 'save' }));
+      })();
     }, 300);
   }, [state, ready]);
 
@@ -241,23 +287,35 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         old.booklets.forEach((b) => extras.set(b.id, old.extraMcqs.filter((q) => q.topicId.startsWith(`${b.id}--`))));
         const versions: Record<string, number> = {};
         const booklets: ImportedBooklet[] = [];
+        // New or changed booklets are downloaded six at a time (one by one took long with dozens of booklets).
+        const need = index.booklets.filter((e) => !(keep.has(e.id) && old.versions[e.id] === e.updatedAt));
+        const got = new Map<string, { booklet: ImportedBooklet; extraMcqs: Mcq[] } | null>();
+        for (let i = 0; i < need.length; i += 6)
+          await Promise.all(
+            need.slice(i, i + 6).map(async (e) => {
+              const full = await api<{ booklet: ImportedBooklet; extraMcqs: Mcq[] }>(`/api/content?id=${encodeURIComponent(e.id)}`, { auth: false }).catch(() => null);
+              got.set(e.id, full);
+            }),
+          );
+        let missing = 0;
         for (const e of index.booklets) {
-          if (keep.has(e.id) && old.versions[e.id] === e.updatedAt) {
-            booklets.push(keep.get(e.id)!);
-            versions[e.id] = e.updatedAt;
-            continue;
-          }
-          const full = await api<{ booklet: ImportedBooklet; extraMcqs: Mcq[] }>(`/api/content?id=${encodeURIComponent(e.id)}`, { auth: false }).catch(() => null);
+          const full = got.get(e.id);
           if (full) {
             booklets.push(full.booklet);
             extras.set(e.id, full.extraMcqs ?? []);
             versions[e.id] = e.updatedAt;
-          } else if (keep.has(e.id)) booklets.push(keep.get(e.id)!);
+          } else if (keep.has(e.id)) {
+            booklets.push(keep.get(e.id)!);
+            // Kept an older copy: the version stays old so the next sync tries again.
+            if (old.versions[e.id] === e.updatedAt || !got.has(e.id)) versions[e.id] = old.versions[e.id];
+          }
+          if (!full && !(keep.has(e.id) && old.versions[e.id] === e.updatedAt)) missing++;
         }
         const bank = await api<{ mcqs: Mcq[] }>('/api/content?mcqs=1', { auth: false }).catch(() => null);
         update(() => ({
           published: {
-            updatedAt: index.updatedAt,
+            // Some booklets failed to download: keep the old date so the next sync tries them again.
+            updatedAt: missing ? old.updatedAt : index.updatedAt,
             booklets,
             extraMcqs: booklets.flatMap((b) => extras.get(b.id) ?? []),
             bankMcqs: bank?.mcqs ?? old.bankMcqs,
